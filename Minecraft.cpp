@@ -3,6 +3,7 @@
 #undef _USE_MATH_DEFINES
 
 #include <array>
+#include <chrono>
 #include <cctype>
 #include <vector>
 #include <cstdint>
@@ -284,6 +285,10 @@ enum class BlockType : std::uint8_t {
     STONE = 0u, DIRT, GRASS, AIR
 }; // enum class BlockType
 
+enum class BlockFace : std::uint8_t {
+    TOP = 0u, FRONT, LEFT, RIGHT, BACK, BOTTOM
+}; // enum class BlockFace
+
 #define CHUNK_X_BLOCK_COUNT (16u)
 #define CHUNK_Y_BLOCK_COUNT (255u)
 #define CHUNK_Z_BLOCK_COUNT (16u)
@@ -434,6 +439,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11InputLayout>  m_pInputLayout;
     Microsoft::WRL::ComPtr<ID3D11Buffer>       m_pConstantBuffer;
 
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>         m_pDepthStencilTexture;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_pDepthStencilState;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilView>  m_pDepthStencilView;
+
     Image m_textureAtlasImage;
     Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_pTextureAtlas;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pTextureAtlasSRV;
@@ -484,7 +493,6 @@ public:
         vp.TopLeftY = 0.f;
 
         this->m_pDeviceContext->RSSetViewports(1u, &vp);
-        this->m_pDeviceContext->OMSetRenderTargets(1u, this->m_pRenderTargetView.GetAddressOf(), nullptr);
 
         Microsoft::WRL::ComPtr<ID3DBlob> pErrorBlob;
 
@@ -559,6 +567,7 @@ public:
         if (this->m_pDevice->CreateBuffer(&cbd, nullptr, &this->m_pConstantBuffer) != S_OK)
             FATAL_ERROR("Failed to create a constant buffer");
 
+        this->CreateDepthBuffer();
         this->LoadAndCreateTextureAtlas();
         this->InitWorld();
 
@@ -570,7 +579,52 @@ public:
     }
 
 private:
-    void LoadAndCreateTextureAtlas() {
+    void CreateDepthBuffer() noexcept {
+        D3D11_TEXTURE2D_DESC td;
+        td.Width  = this->m_window.GetWidth();
+        td.Height = this->m_window.GetHeight();
+        td.MipLevels = 1;
+        td.ArraySize = 1;
+        td.Format = DXGI_FORMAT::DXGI_FORMAT_D32_FLOAT;
+        td.SampleDesc.Count   = 1;
+        td.SampleDesc.Quality = 0;
+        td.Usage     = D3D11_USAGE::D3D11_USAGE_DEFAULT;
+        td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        td.CPUAccessFlags = 0;
+        td.MiscFlags      = 0;
+
+        if (this->m_pDevice->CreateTexture2D(&td, nullptr, &this->m_pDepthStencilTexture) != S_OK)
+            FATAL_ERROR("Failed to create a texture for a constant buffer");
+        
+        D3D11_DEPTH_STENCIL_DESC dsd;
+        dsd.DepthEnable = true;
+        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        dsd.DepthFunc = D3D11_COMPARISON_LESS;
+        dsd.StencilEnable = true;
+        dsd.StencilReadMask = 0xFF;
+        dsd.StencilWriteMask = 0xFF;
+        dsd.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+        dsd.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_INCR;
+        dsd.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        dsd.FrontFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+        dsd.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+        dsd.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_DECR;
+        dsd.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+        dsd.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
+
+        if (this->m_pDevice->CreateDepthStencilState(&dsd, &this->m_pDepthStencilState) != S_OK)
+            FATAL_ERROR("Failed to create a depth stencil state for a constant buffer");
+        
+        D3D11_DEPTH_STENCIL_VIEW_DESC dsvd;
+        dsvd.Format = DXGI_FORMAT::DXGI_FORMAT_D32_FLOAT;
+        dsvd.ViewDimension = D3D11_DSV_DIMENSION::D3D11_DSV_DIMENSION_TEXTURE2D;
+        dsvd.Texture2D.MipSlice = 0;
+
+        if (this->m_pDevice->CreateDepthStencilView(this->m_pDepthStencilTexture.Get(), &dsvd, &this->m_pDepthStencilView) != S_OK)
+            FATAL_ERROR("Failed to create a depth stencil view");
+    }
+
+    void LoadAndCreateTextureAtlas() noexcept {
         this->m_textureAtlasImage = Image(L"texture_atlas.png");
         
         D3D11_TEXTURE2D_DESC textureAtlasDesc{};
@@ -617,7 +671,7 @@ private:
             FATAL_ERROR("Failed to create a sampler state");
     }
 
-    void InitWorld() {
+    void InitWorld() noexcept {
         this->m_pChunks.insert({ ChunkCoord{0, 0}, std::make_unique<Chunk>(ChunkCoord{0, 0}) });
         this->m_pChunks.at(ChunkCoord{ 0, 0 })->GenerateDefaultTerrain(this->m_noise);
         this->GenerateChunkMesh(this->GetChunk(ChunkCoord{0,0}).value());
@@ -660,96 +714,70 @@ private:
                     1.f
                 };
 
-                const float baseU = static_cast<float>(block) * (16.f / this->m_textureAtlasImage.GetWidth());
+                const float baseUInc = 16.f / this->m_textureAtlasImage.GetWidth();
+                const float baseVInc = 16.f / this->m_textureAtlasImage.GetHeight();
 
-                if (*this->GetBlock(pChunk->GetLocation(), x, y, z - 1).value_or(&airBlock) == BlockType::AIR) { // Front
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+0,            +0,            +0}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +0}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
+                const float baseU = static_cast<float>(block) * baseUInc;
 
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};
+                // in clockwise order with "a" in the top left position
+                const auto AddFace = [baseUInc, baseVInc, &nVertices, &baseU, &vertices, this](const Vec4f32& a, const Vec4f32& b, const Vec4f32& c, const Vec4f32& e, const BlockFace& face) {
+                    const float baseV = static_cast<float>(face) * baseVInc;
 
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};                            
+                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV}};
+                    vertices[nVertices++] = Vertex{b, UV{baseU + baseUInc, baseV}};
+                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}};
+
+                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV}};
+                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}};
+                    vertices[nVertices++] = Vertex{e, UV{baseU,            baseV + baseVInc}};
+                };
+
+                // Front
+                if (*this->GetBlock(pChunk->GetLocation(), x, y, z - 1).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint,
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0},
+                            baseCornerPoint + Vec4f32{+0.f,          -BLOCK_LENGTH, +0}, BlockFace::FRONT);               
+                }
+
+                // Back
+                if (*this->GetBlock(pChunk->GetLocation(), x, y, z + 1).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+0,            +0,            +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+0.f,          -BLOCK_LENGTH, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}, BlockFace::FRONT);               
+                }
+
+                // Left
+                if (*this->GetBlock(pChunk->GetLocation(), x - 1, y, z).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint + Vec4f32{0, +0,            +BLOCK_LENGTH},
+                            baseCornerPoint,
+                            baseCornerPoint + Vec4f32{0, -BLOCK_LENGTH, +0},
+                            baseCornerPoint + Vec4f32{0, -BLOCK_LENGTH, +BLOCK_LENGTH}, BlockFace::LEFT);               
+                }
+
+                // Right
+                if (*this->GetBlock(pChunk->GetLocation(), x + 1, y, z).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0},       
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BlockFace::RIGHT);
                 }
                 
-                if (*this->GetBlock(pChunk->GetLocation(), x, y, z + 1).value_or(&airBlock) == BlockType::AIR) { // Back
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+0,            +0,            +BLOCK_LENGTH}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
-
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};
-
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};                            
+                // Top
+                if (*this->GetBlock(pChunk->GetLocation(), x, y + 1, z).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint + Vec4f32{+0,            +0, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +0},
+                            baseCornerPoint, BlockFace::TOP);
                 }
-                
-                if (*this->GetBlock(pChunk->GetLocation(), x - 1, y, z).value_or(&airBlock) == BlockType::AIR) { // Left
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+0, +0,            +0}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+0, +0,            +BLOCK_LENGTH}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+0, -BLOCK_LENGTH, +BLOCK_LENGTH}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+0, -BLOCK_LENGTH, +0}};
 
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};    
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};
-
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};           
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};
-                }
-                
-                if (*this->GetBlock(pChunk->GetLocation(), x + 1, y, z).value_or(&airBlock) == BlockType::AIR) { // Right
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
-
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};    
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};           
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                }
-                
-                if (*this->GetBlock(pChunk->GetLocation(), x, y + 1, z).value_or(&airBlock) == BlockType::AIR) { // Top
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+0,            +0, +0}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+0,            +0, +BLOCK_LENGTH}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +BLOCK_LENGTH}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +0}};
-
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};    
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};           
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                }
-                
-                if (*this->GetBlock(pChunk->GetLocation(), x, y - 1, z).value_or(&airBlock) == BlockType::AIR) { // Bottom
-                    const Vec4f32 p0{baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +0}};
-                    const Vec4f32 p1{baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH}};
-                    const Vec4f32 p2{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
-                    const Vec4f32 p3{baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
-
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};    
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p0, UV{baseU, 0.f}};
-
-                    vertices[nVertices++] = Vertex{p1, UV{baseU, 0.f}};           
-                    vertices[nVertices++] = Vertex{p3, UV{baseU, 0.f}};
-                    vertices[nVertices++] = Vertex{p2, UV{baseU, 0.f}};
+                // Bottom
+                if (*this->GetBlock(pChunk->GetLocation(), x, y - 1, z).value_or(&airBlock) == BlockType::AIR) {
+                    AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH},
+                            baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +0},
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BlockFace::TOP);
                 }
             }
         }
@@ -811,6 +839,9 @@ private:
     void Render() {
         float clearColor[4] = { 1.f, 0.f, 0.f, 1.f };
         this->m_pDeviceContext->ClearRenderTargetView(this->m_pRenderTargetView.Get(), clearColor);
+        this->m_pDeviceContext->ClearDepthStencilView(this->m_pDepthStencilView.Get(), D3D11_CLEAR_FLAG::D3D11_CLEAR_DEPTH, 1.f, 0u);
+
+        this->m_pDeviceContext->OMSetRenderTargets(1u, this->m_pRenderTargetView.GetAddressOf(), this->m_pDepthStencilView.Get());
 
         const UINT stride = sizeof(Vertex);
         const UINT offset = 0;

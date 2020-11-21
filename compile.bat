@@ -1,0 +1,1 @@
+cl.exe Minecraft.cpp /MD /O2 /std:c++17 /I "C:\Code\tools\vcpkg\installed\x86-windows\include" /link /LIBPATH:"C:\Code\tools\vcpkg\installed\x86-windows\lib"

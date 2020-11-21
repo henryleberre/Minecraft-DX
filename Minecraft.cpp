@@ -10,20 +10,19 @@
 #include <iostream>
 #include <unordered_map>
 
-#include <png.h>
-
 #include <immintrin.h>
 
 #include <wrl.h>
 #include <d3d11_4.h>
 #include <Windows.h>
+#include <wincodec.h>
 #include <d3dcompiler.h>
 
 #pragma comment(lib, "d3d11")
 #pragma comment(lib, "zlib.lib")
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "d3dcompiler")
-#pragma comment(lib, "libpng16.lib")
+#pragma comment(lib, "windowscodecs.lib")
 
 #define FATAL_ERROR(errorMsg) { MessageBoxA(NULL, errorMsg, "Minecraft: Fatal Error", MB_ICONERROR); std::exit(-1); }
 
@@ -363,6 +362,49 @@ struct ChunkRenderData {
     size_t nVertices;
 };
 
+class Image {
+private:
+    std::unique_ptr<Coloru8[]> m_pBuffer;
+
+    UINT m_width, m_height, m_nPixels;
+
+public:
+    inline Image() noexcept = default;
+
+    Image(const wchar_t* filename) noexcept {
+        Microsoft::WRL::ComPtr<IWICBitmapSource>      decodedConvertedFrame;
+		Microsoft::WRL::ComPtr<IWICBitmapDecoder>     bitmapDecoder;
+		Microsoft::WRL::ComPtr<IWICImagingFactory>    factory;
+		Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frameDecoder;
+
+		if (CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))
+			FATAL_ERROR("Failed to create IWICImagingFactory");
+
+		if (factory->CreateDecoderFromFilename(filename, NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &bitmapDecoder))
+			FATAL_ERROR("Failed to CreateDecoderFromFilename");
+
+		if (bitmapDecoder->GetFrame(0, &frameDecoder))
+			FATAL_ERROR("Failed to GetFrame the first frame of an image");
+
+		if (frameDecoder->GetSize((UINT*)&this->m_width, (UINT*)&this->m_height))
+			FATAL_ERROR("Failed to GetSize of an image");
+
+		this->m_nPixels = this->m_width * this->m_height;
+		if (WICConvertBitmapSource(GUID_WICPixelFormat32bppRGBA, frameDecoder.Get(), &decodedConvertedFrame))
+			FATAL_ERROR("Failed to WICConvertBitmapSource");
+
+		this->m_pBuffer = std::make_unique<Coloru8[]>(this->m_nPixels * sizeof(Coloru8));
+		const WICRect sampleRect{ 0, 0, static_cast<INT>(this->m_width), static_cast<INT>(this->m_height) };
+		if (decodedConvertedFrame->CopyPixels(&sampleRect, this->m_width * sizeof(Coloru8), this->m_nPixels * sizeof(Coloru8), (BYTE*)this->m_pBuffer.get()))
+			FATAL_ERROR("Failed to CopyPixels from an image");
+    }
+
+    inline UINT     GetWidth()         const noexcept { return this->m_width;         }
+    inline UINT     GetHeight()        const noexcept { return this->m_height;        }
+    inline UINT     GetPixelCount()    const noexcept { return this->m_nPixels;       }
+    inline Coloru8* GetBufferPointer() const noexcept { return this->m_pBuffer.get(); }
+};
+
 class Minecraft {
 private:
     Window m_window;
@@ -377,6 +419,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D11PixelShader>  m_pPixelShader;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>  m_pInputLayout;
     Microsoft::WRL::ComPtr<ID3D11Buffer>       m_pConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>    m_pTextureAtlas;
 
     std::unordered_map<ChunkCoord, std::unique_ptr<Chunk>, ChunkCoordHash> m_pChunks;
     std::unordered_map<ChunkCoord, ChunkRenderData,        ChunkCoordHash> m_pChunkRenderData;
@@ -475,6 +518,37 @@ public:
         if (this->m_pDevice->CreateBuffer(&cbd, nullptr, &this->m_pConstantBuffer) != S_OK)
             FATAL_ERROR("Failed to create a constant buffer");
 
+        this->LoadAndCreateTextureAtlas();
+        this->InitWorld();
+    }
+
+private:
+    void LoadAndCreateTextureAtlas() {
+        Image textureAtlasImage(L"texture_atlas.png");
+        
+        D3D11_TEXTURE2D_DESC textureAtlasDesc{};
+        textureAtlasDesc.Width  = textureAtlasImage.GetWidth();
+        textureAtlasDesc.Height = textureAtlasImage.GetHeight();
+        textureAtlasDesc.CPUAccessFlags = 0;
+        textureAtlasDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        textureAtlasDesc.MiscFlags = 0;
+        textureAtlasDesc.Usage  = D3D11_USAGE::D3D11_USAGE_IMMUTABLE;
+        textureAtlasDesc.Format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UINT;
+        textureAtlasDesc.ArraySize = 1;
+        textureAtlasDesc.MipLevels = 1;
+        textureAtlasDesc.SampleDesc.Count   = 1;
+        textureAtlasDesc.SampleDesc.Quality = 0;
+
+        D3D11_SUBRESOURCE_DATA textureAtlasInitialData;
+        textureAtlasInitialData.pSysMem          = textureAtlasImage.GetBufferPointer();
+        textureAtlasInitialData.SysMemPitch      = textureAtlasImage.GetWidth() * sizeof(Coloru8);
+        textureAtlasInitialData.SysMemSlicePitch = textureAtlasImage.GetPixelCount() * sizeof(Coloru8);
+
+        if (this->m_pDevice->CreateTexture2D(&textureAtlasDesc, &textureAtlasInitialData, &this->m_pTextureAtlas) != S_OK)
+            FATAL_ERROR("Failed to create a 2d texture");
+    }
+
+    void InitWorld() {
         this->m_pChunks.insert({ ChunkCoord{0, 0}, std::make_unique<Chunk>(ChunkCoord{0, 0}) });
         this->m_pChunks.at(ChunkCoord{ 0, 0 })->GenerateDefaultTerrain();
         this->GenerateChunkMesh(this->GetChunk(ChunkCoord{0,0}).value());
@@ -502,29 +576,103 @@ private:
         std::vector<Vertex> vertices(CHUNK_X_BLOCK_COUNT * CHUNK_Y_BLOCK_COUNT * CHUNK_Z_BLOCK_COUNT);
         size_t nVertices = 0u;
 
-        for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
-            for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
-                for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
-                    const BlockType& block = *pChunk->GetBlock(x, y, z).value();
+        BlockType airBlock = BlockType::AIR;
 
-                    if (block != BlockType::AIR) {
-                        const Vec4f32 p = { BLOCK_LENGTH * (x + pChunk->GetLocation().idx * (std::int16_t)CHUNK_X_BLOCK_COUNT),
-                                            y * BLOCK_LENGTH,
-                                            BLOCK_LENGTH * (z + pChunk->GetLocation().idz * (std::int16_t)CHUNK_Z_BLOCK_COUNT),
-                                            1.f };
-    
-                        
-                        // Front
-                        vertices[nVertices++] = Vertex{ p + Vec4f32{BLOCK_LENGTH, BLOCK_LENGTH, 0} };
-                        vertices[nVertices++] = Vertex{ p + Vec4f32{BLOCK_LENGTH} };
-                        vertices[nVertices++] = Vertex{ p };
-                        
-                        vertices[nVertices++] = Vertex{ p + Vec4f32{0, BLOCK_LENGTH} };
-                        vertices[nVertices++] = Vertex{ p + Vec4f32{BLOCK_LENGTH, BLOCK_LENGTH, 0} };
-                        vertices[nVertices++] = Vertex{ p };
-                    }
+        for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
+        for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
+        for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
+            const BlockType& block = *pChunk->GetBlock(x, y, z).value();
+
+            if (block != BlockType::AIR) {
+                const Vec4f32 p = {
+                    BLOCK_LENGTH * (x + pChunk->GetLocation().idx * (std::int16_t)CHUNK_X_BLOCK_COUNT),
+                    (y + 1) * BLOCK_LENGTH,
+                    BLOCK_LENGTH * (z + pChunk->GetLocation().idz * (std::int16_t)CHUNK_Z_BLOCK_COUNT),
+                    1.f
+                };
+
+                if (*this->GetBlock(pChunk->GetLocation(), x, y, z - 1).value_or(&airBlock) == BlockType::AIR) { // Front
+                    const Vec4f32 p0{p + Vec4f32{+0,            +0,            +0}};
+                    const Vec4f32 p1{p + Vec4f32{+BLOCK_LENGTH, +0,            +0}};
+                    const Vec4f32 p2{p + Vec4f32{+0,            -BLOCK_LENGTH, +0}};
+                    const Vec4f32 p3{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
+
+                    vertices[nVertices++] = Vertex{p0};
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p2};
+
+                    vertices[nVertices++] = Vertex{p2};
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p3};                            
+                } else if (*this->GetBlock(pChunk->GetLocation(), x, y, z + 1).value_or(&airBlock) == BlockType::AIR) { // Back
+                    const Vec4f32 p0{p + Vec4f32{+0,            +0,            +BLOCK_LENGTH}};
+                    const Vec4f32 p1{p + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH}};
+                    const Vec4f32 p2{p + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH}};
+                    const Vec4f32 p3{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
+
+                    vertices[nVertices++] = Vertex{p2};
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p0};
+
+                    vertices[nVertices++] = Vertex{p3};
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p2};                            
+                } else if (*this->GetBlock(pChunk->GetLocation(), x - 1, y, z).value_or(&airBlock) == BlockType::AIR) { // Left
+                    const Vec4f32 p0{p + Vec4f32{+0, +0,            +0}};
+                    const Vec4f32 p1{p + Vec4f32{+0, +0,            +BLOCK_LENGTH}};
+                    const Vec4f32 p2{p + Vec4f32{+0, -BLOCK_LENGTH, +BLOCK_LENGTH}};
+                    const Vec4f32 p3{p + Vec4f32{+0, -BLOCK_LENGTH, +0}};
+
+                    vertices[nVertices++] = Vertex{p3};    
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p0};
+
+                    vertices[nVertices++] = Vertex{p1};           
+                    vertices[nVertices++] = Vertex{p3};
+                    vertices[nVertices++] = Vertex{p2};
+                } else if (*this->GetBlock(pChunk->GetLocation(), x + 1, y, z).value_or(&airBlock) == BlockType::AIR) { // Right
+                    const Vec4f32 p0{p + Vec4f32{+BLOCK_LENGTH, +0,            +0}};
+                    const Vec4f32 p1{p + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH}};
+                    const Vec4f32 p2{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
+                    const Vec4f32 p3{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
+
+                    vertices[nVertices++] = Vertex{p0};    
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p3};
+
+                    vertices[nVertices++] = Vertex{p2};           
+                    vertices[nVertices++] = Vertex{p3};
+                    vertices[nVertices++] = Vertex{p1};
+                } else if (*this->GetBlock(pChunk->GetLocation(), x, y + 1, z).value_or(&airBlock) == BlockType::AIR) { // Top
+                    const Vec4f32 p0{p + Vec4f32{+0,            +0, +0}};
+                    const Vec4f32 p1{p + Vec4f32{+0,            +0, +BLOCK_LENGTH}};
+                    const Vec4f32 p2{p + Vec4f32{+BLOCK_LENGTH, +0, +BLOCK_LENGTH}};
+                    const Vec4f32 p3{p + Vec4f32{+BLOCK_LENGTH, +0, +0}};
+
+                    vertices[nVertices++] = Vertex{p0};    
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p3};
+
+                    vertices[nVertices++] = Vertex{p2};           
+                    vertices[nVertices++] = Vertex{p3};
+                    vertices[nVertices++] = Vertex{p1};
+                } else if (*this->GetBlock(pChunk->GetLocation(), x, y - 1, z).value_or(&airBlock) == BlockType::AIR) { // Bottom
+                    const Vec4f32 p0{p + Vec4f32{+0,            -BLOCK_LENGTH, +0}};
+                    const Vec4f32 p1{p + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH}};
+                    const Vec4f32 p2{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}};
+                    const Vec4f32 p3{p + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}};
+
+                    vertices[nVertices++] = Vertex{p3};    
+                    vertices[nVertices++] = Vertex{p1};
+                    vertices[nVertices++] = Vertex{p0};
+
+                    vertices[nVertices++] = Vertex{p1};           
+                    vertices[nVertices++] = Vertex{p3};
+                    vertices[nVertices++] = Vertex{p2};
                 }
             }
+        }
+        }
         }
     
         D3D11_BUFFER_DESC bufferDesc = {};
@@ -553,18 +701,19 @@ private:
     void Update() noexcept {
         this->m_window.Update();
 
+        float speed = 0.1f;
         if (this->m_window.IsKeyDown('A'))
-            this->m_camera.Translate(Vec4f32(-0.01f, 0.f, 0.f, 0.f));
+            this->m_camera.Translate(Vec4f32(-speed, 0.f, 0.f, 0.f));
         if (this->m_window.IsKeyDown('D'))
-            this->m_camera.Translate(Vec4f32(+0.01f, 0.f, 0.f, 0.f));
+            this->m_camera.Translate(Vec4f32(+speed, 0.f, 0.f, 0.f));
         if (this->m_window.IsKeyDown(VK_SPACE))
-            this->m_camera.Translate(Vec4f32(0.f, 0.01f, 0.f, 0.f));
+            this->m_camera.Translate(Vec4f32(0.f, speed, 0.f, 0.f));
         if (this->m_window.IsKeyDown(VK_SHIFT))
-            this->m_camera.Translate(Vec4f32(0.f, -0.01f, 0.f, 0.f));
+            this->m_camera.Translate(Vec4f32(0.f, -speed, 0.f, 0.f));
         if (this->m_window.IsKeyDown('W'))
-            this->m_camera.Translate(Vec4f32(0.f, 0.f, 0.01f, 0.f));
+            this->m_camera.Translate(Vec4f32(0.f, 0.f, speed, 0.f));
         if (this->m_window.IsKeyDown('S'))
-            this->m_camera.Translate(Vec4f32(0.f, 0.f, -0.01f, 0.f));
+            this->m_camera.Translate(Vec4f32(0.f, 0.f, -speed, 0.f));
 
         this->m_camera.CalculateTransform();
 

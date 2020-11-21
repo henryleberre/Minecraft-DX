@@ -273,6 +273,7 @@ struct UV {
 struct Vertex {
     Vec4f32 position;
     UV      uv;
+    float   lighting = 1.0f;
 }; // struct Vertex
 
 std::ostream& operator<<(std::ostream& stream, const Vertex& v) noexcept {
@@ -504,12 +505,14 @@ public:
             struct VS_OUTPUT {
                 float4 position : SV_POSITION;
                 float2 uv : UV;
+                float lighting : LIGHTING;
             };
 
-            VS_OUTPUT main(float4 position : POSITION, float2 uv : UV) {
+            VS_OUTPUT main(float4 position : POSITION, float2 uv : UV, float lighting : LIGHTING) {
                 VS_OUTPUT result;
                 result.position = mul(transform, position);
                 result.uv = uv;
+                result.lighting = lighting;
 
                 return result;
             }
@@ -526,8 +529,8 @@ public:
             Texture2D textureAtlas : register(t0);
             SamplerState samplerState : register(s0);
 
-            float4 main(float3 position : POSITION, float2 uv : UV) : SV_TARGET {
-                return float4(textureAtlas.Sample(samplerState, uv).xyz, 1.0f);
+            float4 main(float3 position : POSITION, float2 uv : UV, float lighting : LIGHTING) : SV_TARGET {
+                return float4(textureAtlas.Sample(samplerState, uv).xyz * lighting, 1.0f);
             }
         )V0G0N";
         Microsoft::WRL::ComPtr<ID3DBlob> pPShaderByteCode;
@@ -538,7 +541,7 @@ public:
         if (this->m_pDevice->CreatePixelShader(pPShaderByteCode->GetBufferPointer(), pPShaderByteCode->GetBufferSize(), nullptr, &this->m_pPixelShader) != S_OK)
             FATAL_ERROR("Failed to create a vertex shader");
 
-        std::array<D3D11_INPUT_ELEMENT_DESC, 2u> ieds = {};
+        std::array<D3D11_INPUT_ELEMENT_DESC, 3u> ieds = {};
         ieds[0].AlignedByteOffset = 0;
         ieds[0].Format = DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_FLOAT;
         ieds[0].InputSlotClass = D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA;
@@ -552,6 +555,13 @@ public:
         ieds[1].SemanticName = "UV";
         ieds[1].InputSlot = 0;
         ieds[1].InstanceDataStepRate = 0;
+
+        ieds[2].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
+        ieds[2].Format = DXGI_FORMAT::DXGI_FORMAT_R32_FLOAT;
+        ieds[2].InputSlotClass = D3D11_INPUT_CLASSIFICATION::D3D11_INPUT_PER_VERTEX_DATA;
+        ieds[2].SemanticName = "LIGHTING";
+        ieds[2].InputSlot = 0;
+        ieds[2].InstanceDataStepRate = 0;
 
         if (this->m_pDevice->CreateInputLayout(ieds.data(), ieds.size(), pVShaderByteCode->GetBufferPointer(), pVShaderByteCode->GetBufferSize(), &this->m_pInputLayout) != S_OK)
             FATAL_ERROR("Failed to create an input layout for a vertex shader");
@@ -723,13 +733,17 @@ private:
                 const auto AddFace = [baseUInc, baseVInc, &nVertices, &baseU, &vertices, this](const Vec4f32& a, const Vec4f32& b, const Vec4f32& c, const Vec4f32& e, const BlockFace& face) {
                     const float baseV = static_cast<float>(face) * baseVInc;
 
-                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV}};
-                    vertices[nVertices++] = Vertex{b, UV{baseU + baseUInc, baseV}};
-                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}};
+                    float lightingPerFace[6] = { 1.0f, 0.9f, 0.5f, 0.9f, 0.5f, 0.25f };
 
-                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV}};
-                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}};
-                    vertices[nVertices++] = Vertex{e, UV{baseU,            baseV + baseVInc}};
+                    const float faceLighting = lightingPerFace[static_cast<std::uint8_t>(face)];
+
+                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV},            faceLighting};
+                    vertices[nVertices++] = Vertex{b, UV{baseU + baseUInc, baseV},            faceLighting};
+                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}, faceLighting};
+
+                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV},            faceLighting};
+                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}, faceLighting};
+                    vertices[nVertices++] = Vertex{e, UV{baseU,            baseV + baseVInc}, faceLighting};
                 };
 
                 // Front

@@ -20,7 +20,6 @@
 #include <d3dcompiler.h>
 
 #pragma comment(lib, "d3d11")
-#pragma comment(lib, "zlib.lib")
 #pragma comment(lib, "User32.lib")
 #pragma comment(lib, "d3dcompiler")
 #pragma comment(lib, "windowscodecs.lib")
@@ -290,12 +289,12 @@ enum class BlockFace : std::uint8_t {
     TOP = 0u, FRONT, LEFT, RIGHT, BACK, BOTTOM
 }; // enum class BlockFace
 
-#define CHUNK_X_BLOCK_COUNT (16u)
-#define CHUNK_Y_BLOCK_COUNT (255u)
-#define CHUNK_Z_BLOCK_COUNT (16u)
+#define CHUNK_X_BLOCK_COUNT (16)
+#define CHUNK_Y_BLOCK_COUNT (255)
+#define CHUNK_Z_BLOCK_COUNT (16)
 #define BLOCK_LENGTH        (1.f)
 
-#define RENDER_DISTANCE (2u) // in chunks
+#define RENDER_DISTANCE (10) // in chunks
 
 class Minecraft;
 
@@ -359,7 +358,8 @@ public:
         for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
         for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
         for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
-            const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1(x/50.f, z/50.f, 4) * CHUNK_Y_BLOCK_COUNT);
+            const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + x) / 50.f,
+                                                                                      (this->m_location.idz * CHUNK_X_BLOCK_COUNT + z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
 
             if (y < yMax) {
                 if (y < yMax - 5)
@@ -529,7 +529,7 @@ public:
             Texture2D textureAtlas : register(t0);
             SamplerState samplerState : register(s0);
 
-            float4 main(float3 position : POSITION, float2 uv : UV, float lighting : LIGHTING) : SV_TARGET {
+            float4 main(float4 position : POSITION, float2 uv : UV, float lighting : LIGHTING) : SV_TARGET {
                 return float4(textureAtlas.Sample(samplerState, uv).xyz * lighting, 1.0f);
             }
         )V0G0N";
@@ -606,7 +606,7 @@ private:
         if (this->m_pDevice->CreateTexture2D(&td, nullptr, &this->m_pDepthStencilTexture) != S_OK)
             FATAL_ERROR("Failed to create a texture for a constant buffer");
         
-        D3D11_DEPTH_STENCIL_DESC dsd;
+        D3D11_DEPTH_STENCIL_DESC dsd{};
         dsd.DepthEnable = true;
         dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
         dsd.DepthFunc = D3D11_COMPARISON_LESS;
@@ -625,7 +625,7 @@ private:
         if (this->m_pDevice->CreateDepthStencilState(&dsd, &this->m_pDepthStencilState) != S_OK)
             FATAL_ERROR("Failed to create a depth stencil state for a constant buffer");
         
-        D3D11_DEPTH_STENCIL_VIEW_DESC dsvd;
+        D3D11_DEPTH_STENCIL_VIEW_DESC dsvd{};
         dsvd.Format = DXGI_FORMAT::DXGI_FORMAT_D32_FLOAT;
         dsvd.ViewDimension = D3D11_DSV_DIMENSION::D3D11_DSV_DIMENSION_TEXTURE2D;
         dsvd.Texture2D.MipSlice = 0;
@@ -682,9 +682,22 @@ private:
     }
 
     void InitWorld() noexcept {
-        this->m_pChunks.insert({ ChunkCoord{0, 0}, std::make_unique<Chunk>(ChunkCoord{0, 0}) });
-        this->m_pChunks.at(ChunkCoord{ 0, 0 })->GenerateDefaultTerrain(this->m_noise);
-        this->GenerateChunkMesh(this->GetChunk(ChunkCoord{0,0}).value());
+        for (int x = -RENDER_DISTANCE; x < RENDER_DISTANCE; ++x) {
+        for (int z = -RENDER_DISTANCE; z < RENDER_DISTANCE; ++z) {
+            ChunkCoord cc{x, z};
+
+            this->m_pChunks.insert({ cc, std::make_unique<Chunk>(cc) });
+            this->m_pChunks.at(cc)->GenerateDefaultTerrain(this->m_noise);
+        }
+        }
+
+        for (int x = -RENDER_DISTANCE; x < RENDER_DISTANCE; ++x) {
+        for (int z = -RENDER_DISTANCE; z < RENDER_DISTANCE; ++z) {
+            ChunkCoord cc{x, z};
+
+            this->GenerateChunkMesh(this->GetChunk(cc).value());
+        }
+        }
     }
 
 private:
@@ -697,7 +710,7 @@ private:
         return {  };
     }
 
-    std::optional<BlockType*> GetBlock(const ChunkCoord& chunkLocation, const size_t idx, const size_t idy, const size_t idz) {
+    std::optional<BlockType*> GetBlock(const ChunkCoord& chunkLocation, const size_t idx, const size_t idy, const size_t idz) noexcept {
         const std::optional<Chunk*>& chunkOpt = this->GetChunk(chunkLocation);
 
         if (!chunkOpt.has_value()) return {  };
@@ -705,8 +718,17 @@ private:
         return chunkOpt.value()->GetBlock(idx, idy, idz);
     }
 
+    std::optional<BlockType*> GetBlock(const std::int16_t worldX, const std::int16_t worldY, const std::int16_t worldZ) noexcept {
+        ChunkCoord cc{
+            worldX / CHUNK_X_BLOCK_COUNT,
+            worldZ / CHUNK_Z_BLOCK_COUNT
+        };
+
+        return this->GetBlock(cc, std::abs(worldX) % CHUNK_X_BLOCK_COUNT, worldY, std::abs(worldZ) % CHUNK_Z_BLOCK_COUNT);
+    }
+
     void GenerateChunkMesh(const Chunk* const pChunk) noexcept {
-        std::vector<Vertex> vertices(CHUNK_X_BLOCK_COUNT * CHUNK_Y_BLOCK_COUNT * CHUNK_Z_BLOCK_COUNT);
+        std::vector<Vertex> vertices(CHUNK_X_BLOCK_COUNT * CHUNK_Y_BLOCK_COUNT * CHUNK_Z_BLOCK_COUNT * 3u);
         size_t nVertices = 0u;
 
         BlockType airBlock = BlockType::AIR;
@@ -854,35 +876,29 @@ private:
         float clearColor[4] = { 1.f, 0.f, 0.f, 1.f };
         this->m_pDeviceContext->ClearRenderTargetView(this->m_pRenderTargetView.Get(), clearColor);
         this->m_pDeviceContext->ClearDepthStencilView(this->m_pDepthStencilView.Get(), D3D11_CLEAR_FLAG::D3D11_CLEAR_DEPTH, 1.f, 0u);
-
+        
         this->m_pDeviceContext->OMSetRenderTargets(1u, this->m_pRenderTargetView.GetAddressOf(), this->m_pDepthStencilView.Get());
-
+        
         const UINT stride = sizeof(Vertex);
         const UINT offset = 0;
-
-        std::vector<ID3D11Buffer*> pVertexBuffers(this->m_pChunks.size());
-        size_t i = 0;
-        size_t vertexCount = 0u;
-        for (const std::pair<ChunkCoord, ChunkRenderData>& p : this->m_pChunkRenderData) {
-            const ChunkRenderData& crd = p.second;
-
-            pVertexBuffers[i++] =  crd.pVertexBuffer.Get();
-            vertexCount         += crd.nVertices;
-        }
-
-        this->m_pDeviceContext->IASetVertexBuffers(0u, pVertexBuffers.size(), pVertexBuffers.data(), &stride, &offset);
+        
         this->m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         this->m_pDeviceContext->IASetInputLayout(this->m_pInputLayout.Get());
-
+        
         this->m_pDeviceContext->VSSetShader(this->m_pVertexShader.Get(), nullptr, 0u);
         this->m_pDeviceContext->PSSetShader(this->m_pPixelShader.Get(), nullptr, 0u);
         this->m_pDeviceContext->VSSetConstantBuffers(0u, 1u, this->m_pConstantBuffer.GetAddressOf());
         
         this->m_pDeviceContext->PSSetSamplers(0u, 1u, this->m_pTextureAtlasSamplerState.GetAddressOf());
         this->m_pDeviceContext->PSSetShaderResources(0u, 1u, this->m_pTextureAtlasSRV.GetAddressOf());
+        for (const std::pair<ChunkCoord, ChunkRenderData>& p : this->m_pChunkRenderData) {
+            const ChunkRenderData& crd = p.second;
+        
+            this->m_pDeviceContext->IASetVertexBuffers(0u, 1u, crd.pVertexBuffer.GetAddressOf(), &stride, &offset);
+            this->m_pDeviceContext->Draw(crd.nVertices, 0u);
+        }
 
-        this->m_pDeviceContext->Draw(vertexCount, 0u);
-
+        std::cout << this->m_pSwapChain.Get() << '\n';
         this->m_pSwapChain->Present(1u, 0u);
     }
 

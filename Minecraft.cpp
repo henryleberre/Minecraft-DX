@@ -622,7 +622,7 @@ private:
         const UINT stride = sizeof(Vertex);
         const UINT offset = 0;
         
-        this->m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
+        this->m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         this->m_pDeviceContext->IASetInputLayout(this->m_pInputLayout.Get());
         
         this->m_pDeviceContext->VSSetShader(this->m_pVertexShader.Get(), nullptr, 0u);

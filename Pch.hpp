@@ -17,7 +17,9 @@
 #undef _USE_MATH_DEFINES
 
 // Intrinsics
-#include <immintrin.h>
+#ifndef __MINECRAFT__NO_SIMD
+    #include <immintrin.h>
+#endif // __MINECRAFT__NO_SIMD
 
 #ifdef _WIN32
 

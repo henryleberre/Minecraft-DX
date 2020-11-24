@@ -44,6 +44,22 @@ inline Vec4f32 operator-(const float& lhs, const Vec4f32& rhs) noexcept { return
 inline Vec4f32 operator*(const float& lhs, const Vec4f32& rhs) noexcept { return rhs * lhs; }
 inline Vec4f32 operator/(const float& lhs, const Vec4f32& rhs) noexcept { return rhs / lhs; }
 
+inline float DotProduct3D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
+#ifndef __MINECRAFT__NO_SIMD
+    return _mm_cvtss_f32(_mm_dp_ps(lhs._reg, rhs._reg, 0b01111111));
+#else
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+#endif
+}
+
+inline float DotProduct4D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
+#ifndef __MINECRAFT__NO_SIMD
+    return _mm_cvtss_f32(_mm_dp_ps(lhs._reg, rhs._reg, 0b11111111));
+#else
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+#endif
+}
+
 std::ostream& operator<<(std::ostream& stream, const Vec4f32& rhs) {
     stream << '(' << rhs.x << ',' << rhs.y << ',' << rhs.z << ',' << rhs.w << ')';
 

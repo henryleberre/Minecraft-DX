@@ -38,7 +38,7 @@ inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
 #define CHUNK_Z_BLOCK_COUNT (16)
 #define BLOCK_LENGTH        (1.f)
 
-#define RENDER_DISTANCE (10) // in chunks
+#define RENDER_DISTANCE (1) // in chunks
 
 class Minecraft;
 
@@ -307,7 +307,7 @@ public:
         ieds[2].InputSlot = 0;
         ieds[2].InstanceDataStepRate = 0;
 
-        if (this->m_pDevice->CreateInputLayout(ieds.data(), ieds.size(), pVShaderByteCode->GetBufferPointer(), pVShaderByteCode->GetBufferSize(), &this->m_pInputLayout) != S_OK)
+        if (this->m_pDevice->CreateInputLayout(ieds.data(), static_cast<UINT>(ieds.size()), pVShaderByteCode->GetBufferPointer(), pVShaderByteCode->GetBufferSize(), &this->m_pInputLayout) != S_OK)
             FATAL_ERROR("Failed to create an input layout for a vertex shader");
 
         D3D11_BUFFER_DESC cbd;
@@ -329,7 +329,7 @@ public:
         while (*this->GetBlock(ChunkCoord{0,0}, 0, y, 0).value() != BlockType::AIR)
             ++y;
 
-        this->m_camera = Camera({ 0.f, (y + 1.f) * BLOCK_LENGTH, 0.f, 0.f }, M_PI_2, this->m_window.GetHeight() / (float)this->m_window.GetWidth(), 0.01f, 1000.f);
+        this->m_camera = Camera({ 0.f, (y + 1.f) * BLOCK_LENGTH, 0.f, 0.f }, (float)M_PI_2, this->m_window.GetHeight() / (float)this->m_window.GetWidth(), 0.01f, 1000.f);
     }
 
 private:
@@ -566,7 +566,7 @@ private:
     
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.BindFlags = D3D11_BIND_FLAG::D3D11_BIND_VERTEX_BUFFER;
-        bufferDesc.ByteWidth = nVertices * sizeof(Vertex);
+        bufferDesc.ByteWidth = static_cast<UINT>(nVertices * sizeof(Vertex));
         bufferDesc.CPUAccessFlags = 0;
         bufferDesc.MiscFlags = 0;
         bufferDesc.StructureByteStride = sizeof(Vertex);
@@ -617,7 +617,7 @@ private:
     }
 
     void Render() {
-        float clearColor[4] = { 1.f, 0.f, 0.f, 1.f };
+        float clearColor[4] = { 0.2284f, 0.3486f, 0.4230f, 1.f };
         this->m_pDeviceContext->ClearRenderTargetView(this->m_pRenderTargetView.Get(), clearColor);
         this->m_pDeviceContext->ClearDepthStencilView(this->m_pDepthStencilView.Get(), D3D11_CLEAR_FLAG::D3D11_CLEAR_DEPTH, 1.f, 0u);
         
@@ -639,7 +639,7 @@ private:
             const ChunkRenderData& crd = p.second;
         
             this->m_pDeviceContext->IASetVertexBuffers(0u, 1u, crd.pVertexBuffer.GetAddressOf(), &stride, &offset);
-            this->m_pDeviceContext->Draw(crd.nVertices, 0u);
+            this->m_pDeviceContext->Draw(static_cast<UINT>(crd.nVertices), 0u);
         }
 
         this->m_pSwapChain->Present(1u, 0u);

@@ -4,21 +4,16 @@
 #include "Pch.hpp"
 
 struct Vec4f32 {
-    union {
-        // anonymous structs are illegal in C++ but they work anyway :-)
-        struct { float x, y, z, w; };
-        struct { float r, g, b, a; };
-        struct { float red, green, blue, alpha; };
-    };
+    float x, y, z, w;
 
     inline Vec4f32(const float x = 0.f, const float y = 0.f, const float z = 0.f, const float w = 0.f) noexcept {
         this->x = x; this->y = y; this->z = z; this->w = w;
     }
 
-    inline Vec4f32& operator+=(const Vec4f32& rhs) noexcept { this->x += rhs.y; this->y += rhs.y; this->z += rhs.z; this->w += rhs.w; return *this; }
-    inline Vec4f32& operator-=(const Vec4f32& rhs) noexcept { this->x -= rhs.y; this->y -= rhs.y; this->z -= rhs.z; this->w -= rhs.w; return *this; }
-    inline Vec4f32& operator*=(const Vec4f32& rhs) noexcept { this->x *= rhs.y; this->y *= rhs.y; this->z *= rhs.z; this->w *= rhs.w; return *this; }
-    inline Vec4f32& operator/=(const Vec4f32& rhs) noexcept { this->x /= rhs.y; this->y /= rhs.y; this->z /= rhs.z; this->w /= rhs.w; return *this; }
+    inline Vec4f32& operator+=(const Vec4f32& rhs) noexcept { this->x += rhs.x; this->y += rhs.y; this->z += rhs.z; this->w += rhs.w; return *this; }
+    inline Vec4f32& operator-=(const Vec4f32& rhs) noexcept { this->x -= rhs.x; this->y -= rhs.y; this->z -= rhs.z; this->w -= rhs.w; return *this; }
+    inline Vec4f32& operator*=(const Vec4f32& rhs) noexcept { this->x *= rhs.x; this->y *= rhs.y; this->z *= rhs.z; this->w *= rhs.w; return *this; }
+    inline Vec4f32& operator/=(const Vec4f32& rhs) noexcept { this->x /= rhs.x; this->y /= rhs.y; this->z /= rhs.z; this->w /= rhs.w; return *this; }
 
     inline Vec4f32& operator+=(const float& rhs) noexcept { this->x += rhs; this->y += rhs; this->z += rhs; this->w += rhs; return *this; }
     inline Vec4f32& operator-=(const float& rhs) noexcept { this->x -= rhs; this->y -= rhs; this->z -= rhs; this->w -= rhs; return *this; }

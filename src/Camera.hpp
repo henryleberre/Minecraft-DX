@@ -6,11 +6,11 @@
 
 class Camera {
 private:
-    Vec4f32 m_position = {};
-    float   m_fov = M_PI_2;
+    Vec4f32 m_position    = {};
+    float   m_fov         = static_cast<float>(M_PI_2);
     float   m_aspectRatio = 9.f / 16.f;
-    float   m_zNear = 0.1f;
-    float   m_zFar = 1000.f;
+    float   m_zNear       = 0.1f;
+    float   m_zFar        = 1000.f;
 
     Mat4x4f32 m_transform;
 
@@ -23,24 +23,27 @@ public:
 
     inline Vec4f32 GetPosition() const noexcept { return this->m_position; }
 
-    inline void Translate(const Vec4f32& rhs) noexcept { this->m_position += rhs; }
-    inline void SetPosition(const Vec4f32& rhs) noexcept { this->m_position = rhs; }
+    inline void Translate  (const Vec4f32& rhs) noexcept { this->m_position += rhs; }
+    inline void SetPosition(const Vec4f32& rhs) noexcept { this->m_position = rhs;  }
 
     inline Mat4x4f32 GetTransform() const noexcept { return this->m_transform; }
 
     void CalculateTransform() noexcept {
-        this->m_transform =
-            Mat4x4f32{ {
+        const Mat4x4f32 translation = Mat4x4f32{{
                 1.f,                 0.f,                 0.f,                 0.f,
                 0.f,                 1.f,                 0.f,                 0.f,
                 0.f,                 0.f,                 1.f,                 0.f,
                 -this->m_position.x, -this->m_position.y, -this->m_position.z, 1.f
-            } } *Mat4x4f32{ {
-                this->m_aspectRatio * this->m_fov, 0.f,                 0.f,                                                                                    0.f,
-                0.f,                               this->m_fov,         0.f,                                                                                    0.f,
-                0.f,                               0.f,                 this->m_zFar / (this->m_zFar - this->m_zNear),                                          1.f,
+        }};
+
+        const Mat4x4f32 perspective = Mat4x4f32{ {
+                this->m_aspectRatio * this->m_fov, 0.f,                 0.f,                                              0.f,
+                0.f,                               this->m_fov,         0.f,                                              0.f,
+                0.f,                               0.f,                 this->m_zFar / (this->m_zFar - this->m_zNear),    1.f,
                 0.f,                               0.f, (-this->m_zFar * this->m_zNear) / (this->m_zFar - this->m_zNear), 1.f,
-            } };
+        } };
+
+        this->m_transform = translation * perspective;
     }
 };
 

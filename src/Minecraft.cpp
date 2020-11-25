@@ -53,8 +53,8 @@ class ChunkCoordHash {
 public:
     inline size_t operator()(const ChunkCoord& cc) const
     {
-        const int64_t a = static_cast<int64_t>(cc.idx) << 32;
-        const int64_t b = static_cast<int64_t>(cc.idz) << 0;
+        const std::uint64_t a = ((cc.idx < 0 ? ((std::uint64_t)1u << 31) : 0) | static_cast<uint64_t>(std::abs(cc.idx))) << 32;
+        const std::uint64_t b = ((cc.idz < 0 ? ((std::uint64_t)1u << 31) : 0) | static_cast<uint64_t>(std::abs(cc.idz)));
 
         return a | b;
     }
@@ -169,6 +169,9 @@ public:
     inline Coloru8* GetBufferPointer() const noexcept { return this->m_pBuffer.get(); }
 };
 
+template <typename T>
+using ChunkCoordMap = std::unordered_map<ChunkCoord, T, ChunkCoordHash>;
+
 class Minecraft {
 private:
     Window m_window;
@@ -193,15 +196,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pTextureAtlasSRV;
     Microsoft::WRL::ComPtr<ID3D11SamplerState>       m_pTextureAtlasSamplerState;
 
-    std::unordered_map<ChunkCoord, std::unique_ptr<Chunk>, ChunkCoordHash> m_pChunks;
-    std::unordered_map<ChunkCoord, ChunkRenderData,        ChunkCoordHash> m_pChunkRenderData;
+    ChunkCoordMap<std::unique_ptr<Chunk>> m_pChunksData;
+
+    ChunkCoordMap<Chunk*>          m_pRenderChunks;
+    ChunkCoordMap<ChunkRenderData> m_pRenderChunksDXData;
 
     siv::PerlinNoise m_noise;
 
 public:
     Minecraft() noexcept :
         m_window("Minecraft", 1920u / 2, 1080u / 2),
-        m_noise(std::random_device())
+        m_noise(std::random_device()),
+        m_camera(Camera(Vec4f32{ 0.f, 40, 0.01f, 1000.f}, M_PI_2, 9.f / 16.f, 0.1f, 1000.f))
     {
         this->m_noise.reseed(1234);
 
@@ -323,13 +329,6 @@ public:
 
         this->CreateDepthBuffer();
         this->LoadAndCreateTextureAtlas();
-        this->InitWorld();
-
-        size_t y = 0u;
-        while (*this->GetBlock(ChunkCoord{0,0}, 0, y, 0).value() != BlockType::AIR)
-            ++y;
-
-        this->m_camera = Camera({ 0.f, (y + 1.f) * BLOCK_LENGTH, 0.f, 0.f }, (float)M_PI_2, this->m_window.GetHeight() / (float)this->m_window.GetWidth(), 0.01f, 1000.f);
     }
 
 private:
@@ -425,29 +424,10 @@ private:
             FATAL_ERROR("Failed to create a sampler state");
     }
 
-    void InitWorld() noexcept {
-        for (int x = -RENDER_DISTANCE; x < RENDER_DISTANCE; ++x) {
-        for (int z = -RENDER_DISTANCE; z < RENDER_DISTANCE; ++z) {
-            ChunkCoord cc{x, z};
-
-            this->m_pChunks.insert({ cc, std::make_unique<Chunk>(cc) });
-            this->m_pChunks.at(cc)->GenerateDefaultTerrain(this->m_noise);
-        }
-        }
-
-        for (int x = -RENDER_DISTANCE; x < RENDER_DISTANCE; ++x) {
-        for (int z = -RENDER_DISTANCE; z < RENDER_DISTANCE; ++z) {
-            ChunkCoord cc{x, z};
-
-            this->GenerateChunkMesh(this->GetChunk(cc).value());
-        }
-        }
-    }
-
 private:
     std::optional<Chunk*> GetChunk(const ChunkCoord& location) noexcept {
-        const auto pChunkIterator = this->m_pChunks.find(location);
-        if (pChunkIterator != this->m_pChunks.end()) {
+        const auto pChunkIterator = this->m_pChunksData.find(location);
+        if (pChunkIterator != this->m_pChunksData.end()) {
             return (*pChunkIterator).second.get();
         }
 
@@ -577,17 +557,37 @@ private:
         sd.SysMemPitch = 0;
         sd.SysMemSlicePitch = 0;
     
-        auto pVertexBufferIt = this->m_pChunkRenderData.find(pChunk->GetLocation());
-        if (pVertexBufferIt == this->m_pChunkRenderData.end()) {
-            this->m_pChunkRenderData.insert({ pChunk->GetLocation(), ChunkRenderData{{}, nVertices} });
-            pVertexBufferIt = this->m_pChunkRenderData.find(pChunk->GetLocation());
+        auto pVertexBufferIt = this->m_pRenderChunksDXData.find(pChunk->GetLocation());
+        if (pVertexBufferIt == this->m_pRenderChunksDXData.end()) {
+            this->m_pRenderChunksDXData.insert({ pChunk->GetLocation(), ChunkRenderData{{}, nVertices} });
+            pVertexBufferIt = this->m_pRenderChunksDXData.find(pChunk->GetLocation());
         }
 
         if (this->m_pDevice->CreateBuffer(&bufferDesc, &sd, (*pVertexBufferIt).second.pVertexBuffer.GetAddressOf()) != S_OK)
             FATAL_ERROR("Failed to create a vertex buffer");
     }
 
+    void UpdateWolrd() noexcept {
+        const Vec4f32 cameraPosition = this->m_camera.GetPosition();
+
+        ChunkCoord cc;
+        for (cc.idx = (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT - RENDER_DISTANCE; cc.idx < (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idx) {
+        for (cc.idz = (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT - RENDER_DISTANCE; cc.idz < (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idz) {
+            std::optional<Chunk*> pChunkOpt = this->GetChunk(cc);
+
+            if (!pChunkOpt.has_value()) {
+                this->m_pChunksData.insert({ cc, std::make_unique<Chunk>(cc) });
+                pChunkOpt = this->GetChunk(cc);
+                pChunkOpt.value()->GenerateDefaultTerrain(this->m_noise);
+                this->GenerateChunkMesh(pChunkOpt.value());
+            }
+        }
+        }
+    }
+
     void Update() noexcept {
+        this->UpdateWolrd();
+
         this->m_window.Update();
 
         float speed = 0.1f;
@@ -635,7 +635,7 @@ private:
         
         this->m_pDeviceContext->PSSetSamplers(0u, 1u, this->m_pTextureAtlasSamplerState.GetAddressOf());
         this->m_pDeviceContext->PSSetShaderResources(0u, 1u, this->m_pTextureAtlasSRV.GetAddressOf());
-        for (const std::pair<ChunkCoord, ChunkRenderData>& p : this->m_pChunkRenderData) {
+        for (const std::pair<ChunkCoord, ChunkRenderData>& p : this->m_pRenderChunksDXData) {
             const ChunkRenderData& crd = p.second;
         
             this->m_pDeviceContext->IASetVertexBuffers(0u, 1u, crd.pVertexBuffer.GetAddressOf(), &stride, &offset);

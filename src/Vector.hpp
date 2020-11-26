@@ -19,6 +19,12 @@ struct Vec4f32 {
     inline Vec4f32& operator-=(const float& rhs) noexcept { this->x -= rhs; this->y -= rhs; this->z -= rhs; this->w -= rhs; return *this; }
     inline Vec4f32& operator*=(const float& rhs) noexcept { this->x *= rhs; this->y *= rhs; this->z *= rhs; this->w *= rhs; return *this; }
     inline Vec4f32& operator/=(const float& rhs) noexcept { this->x /= rhs; this->y /= rhs; this->z /= rhs; this->w /= rhs; return *this; }
+
+    inline float GetLength2D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y); }
+    inline float GetLength3D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z); }
+    inline float GetLength4D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z + this->w*this->w); }
+
+    inline void Normalize4D() noexcept { this->operator/=(this->GetLength4D()); }
 }; // struct Vec4f32
 
 inline Vec4f32 operator+(const Vec4f32& lhs, const Vec4f32& rhs) noexcept { return Vec4f32(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w); }
@@ -42,6 +48,10 @@ inline float DotProduct3D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
 
 inline float DotProduct4D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
+}
+
+inline Vec4f32 Normalized4D(const Vec4f32& lhs) noexcept {
+    return lhs / lhs.GetLength4D();
 }
 
 std::ostream& operator<<(std::ostream& stream, const Vec4f32& rhs) {

@@ -7,6 +7,7 @@
 class Camera {
 private:
     Vec4f32 m_position    = {};
+    Vec4f32 m_rotation    = {};
     float   m_fov         = static_cast<float>(M_PI_2);
     float   m_aspectRatio = 9.f / 16.f;
     float   m_zNear       = 0.1f;
@@ -29,19 +30,27 @@ public:
     inline Mat4x4f32 GetTransform() const noexcept { return this->m_transform; }
 
     void CalculateTransform() noexcept {
-        const Mat4x4f32 translation = Mat4x4f32{{
-                1.f,                 0.f,                 0.f,                 0.f,
-                0.f,                 1.f,                 0.f,                 0.f,
-                0.f,                 0.f,                 1.f,                 0.f,
-                -this->m_position.x, -this->m_position.y, -this->m_position.z, 1.f
-        }};
+        const Mat4x4f32 translation = MakeTranslationMatrix(this->m_position * (-1.f));
 
-        const Mat4x4f32 perspective = Mat4x4f32{ {
-                this->m_aspectRatio * this->m_fov, 0.f,                 0.f,                                              0.f,
-                0.f,                               this->m_fov,         0.f,                                              0.f,
-                0.f,                               0.f,                 this->m_zFar / (this->m_zFar - this->m_zNear),    1.f,
-                0.f,                               0.f, (-this->m_zFar * this->m_zNear) / (this->m_zFar - this->m_zNear), 1.f,
-        } };
+       //const Vec4f32 focalPoint = {0.f, 0.f, 1.f, 0.f};
+
+       //const Vec4f32 zaxis = Normalized4D(focalPoint - this->m_position);
+		//const Vec4f32 xaxis = Normalized4D(Vec4f32::CrossProduct3D(Vec4f32{}, zaxis));
+		//const Vec4f32 yaxis = CrossProduct3D(zaxis, xaxis);
+
+       //const Mat4x4f32 lookAtMatrix = Mat4x4f32{{
+       //    xaxis.x, yaxis.x, zaxis.x, 0,
+		//	xaxis.y, yaxis.y, zaxis.y, 0,
+		//	xaxis.z, yaxis.z, zaxis.z, 0,
+		//	0.f,     0.f,     0.f,     1
+       //}};
+
+        const Mat4x4f32 perspective = Mat4x4f32{{
+                this->m_aspectRatio * this->m_fov, 0.f,         0.f,                                                              0.f,
+                0.f,                               this->m_fov, 0.f,                                                              0.f,
+                0.f,                               0.f,         this->m_zFar / (this->m_zFar - this->m_zNear),                    1.f,
+                0.f,                               0.f,         (-this->m_zFar * this->m_zNear) / (this->m_zFar - this->m_zNear), 1.f,
+        }};
 
         this->m_transform = translation * perspective;
     }

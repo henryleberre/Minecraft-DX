@@ -23,6 +23,7 @@
     #include <wrl.h>
     #include <d3d11_4.h>
     #include <Windows.h>
+    #include <hidusage.h>
     #include <wincodec.h>
     #include <d3dcompiler.h>
 

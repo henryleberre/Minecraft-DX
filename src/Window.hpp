@@ -17,6 +17,20 @@ private:
 
     std::array<bool, 0xFE> m_bDownKeys = { false };
 
+    std::int16_t m_mouseXDelta = 0;
+    std::int16_t m_mouseYDelta = 0;
+
+private:
+    void InitRawInput() noexcept {
+        RAWINPUTDEVICE rid{};
+        rid.usUsagePage = HID_USAGE_PAGE_GENERIC;
+        rid.usUsage     = HID_USAGE_GENERIC_MOUSE;
+        rid.hwndTarget  = NULL;
+        rid.dwFlags     = 0u;
+        if (!RegisterRawInputDevices(&rid, 1u, sizeof(RAWINPUTDEVICE)))
+            FATAL_ERROR("Failed to register raw input devices");
+    }
+
 public:
     Window(const char* title, const std::uint16_t width, const std::uint16_t height) noexcept
         : m_width(width), m_height(height)
@@ -46,6 +60,8 @@ public:
 #endif
 
         this->ShowWindow();
+
+        this->InitRawInput();
     }
 
     inline void Destroy() noexcept {
@@ -61,12 +77,12 @@ public:
     }
 
     inline bool IsKeyDown(const char c) const noexcept { return  this->m_bDownKeys[std::toupper(c)]; }
-    inline bool IsKeyUp(const char c) const noexcept { return !this->m_bDownKeys[std::toupper(c)]; }
+    inline bool IsKeyUp  (const char c) const noexcept { return !this->m_bDownKeys[std::toupper(c)]; }
 
     inline std::uint16_t GetWidth()  const noexcept { return this->m_width; }
     inline std::uint16_t GetHeight() const noexcept { return this->m_height; }
 
-    inline bool ClipCursor() {
+    inline void ClipCursor() {
         RECT clipRect;
         if (!GetClientRect(this->m_handle, &clipRect))
             FATAL_ERROR("Failed get the window's client rect");
@@ -92,7 +108,13 @@ public:
     inline HWND GetHandle() const noexcept { return this->m_handle; }
     inline bool IsRunning() const noexcept { return this->m_handle != NULL; }
 
+    inline std::int16_t GetMouseXDelta() const noexcept { return this->m_mouseXDelta; }
+    inline std::int16_t GetMouseYDelta() const noexcept { return this->m_mouseYDelta; }
+
     void Update() {
+        this->m_mouseXDelta = 0;
+        this->m_mouseYDelta = 0;
+
         MSG message;
         while (PeekMessageA(&message, this->m_handle, 0, 0, PM_REMOVE) > 0) {
             TranslateMessage(&message);
@@ -118,6 +140,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) n
             return 0;
         case WM_KEYUP:
             pWindow->m_bDownKeys[wParam] = false;
+            return 0;
+        case WM_INPUT:
+            UINT dwSize;
+
+            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, NULL, &dwSize, sizeof(RAWINPUTHEADER)))
+                FATAL_ERROR("Failed to get raw input data (wrong return value with pData = NULL)");
+            
+            std::unique_ptr<BYTE[]> pBuff = std::make_unique<BYTE[]>(dwSize);
+
+            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, pBuff.get(), &dwSize, sizeof(RAWINPUTHEADER)) != dwSize)
+                FATAL_ERROR("Failed to get raw input data (wrong size)");
+            
+            RAWINPUT* pRawInput = reinterpret_cast<RAWINPUT*>(pBuff.get());
+
+            if (pRawInput->header.dwType == RIM_TYPEMOUSE) {
+                pWindow->m_mouseXDelta += pRawInput->data.mouse.lLastX;
+                pWindow->m_mouseYDelta += pRawInput->data.mouse.lLastY;
+            } 
+
             return 0;
         };
     }

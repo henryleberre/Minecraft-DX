@@ -1,1 +1,1 @@
-Minecraft.exe
+Minecraft-MD.exe

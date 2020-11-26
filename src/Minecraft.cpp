@@ -43,20 +43,22 @@ inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
 class Minecraft;
 
 struct ChunkCoord {
-    std::int32_t idx;
-    std::int32_t idz;
+    std::int16_t idx;
+    std::int16_t idz;
 
     inline bool operator==(const ChunkCoord& rhs) const noexcept { return this->idx == rhs.idx && this->idz == rhs.idz; }
 }; // struct ChunkCoord
+
+#include <bitset>
 
 class ChunkCoordHash {
 public:
     inline size_t operator()(const ChunkCoord& cc) const
     {
-        const std::uint64_t a = ((cc.idx < 0 ? ((std::uint64_t)1u << 31) : 0) | static_cast<uint64_t>(std::abs(cc.idx))) << 32;
-        const std::uint64_t b = ((cc.idz < 0 ? ((std::uint64_t)1u << 31) : 0) | static_cast<uint64_t>(std::abs(cc.idz)));
+        const std::uint16_t a = ((cc.idx < 0 ? (static_cast<std::uint16_t>(1u) << 15) : 0) | static_cast<std::uint16_t>(std::abs(cc.idx)));
+        const std::uint16_t b = ((cc.idz < 0 ? (static_cast<std::uint16_t>(1u) << 15) : 0) | static_cast<std::uint16_t>(std::abs(cc.idz)));
 
-        return a | b;
+        return (static_cast<std::uint32_t>(a) << 16u) | static_cast<std::uint32_t>(b);
     }
 };
 
@@ -102,8 +104,8 @@ public:
         for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
         for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
         for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
-            const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + x) / 50.f,
-                                                                                      (this->m_location.idz * CHUNK_X_BLOCK_COUNT + z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
+            const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + (std::int16_t)x) / 50.f,
+                                                                                      (this->m_location.idz * CHUNK_X_BLOCK_COUNT + (std::int16_t)z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
 
             if (y < yMax) {
                 if (y < yMax - 5)
@@ -463,10 +465,11 @@ private:
             const BlockType& block = *pChunk->GetBlock(x, y, z).value();
 
             if (!IsBlockTransparent(block)) {
+                // top left corner point of the current block
                 const Vec4f32 baseCornerPoint = {
-                    BLOCK_LENGTH * (x + pChunk->GetLocation().idx * (std::int16_t)CHUNK_X_BLOCK_COUNT),
+                    BLOCK_LENGTH * ((std::int16_t)x + pChunk->GetLocation().idx * (std::int16_t)CHUNK_X_BLOCK_COUNT),
                     (y + 1) * BLOCK_LENGTH,
-                    BLOCK_LENGTH * (z + pChunk->GetLocation().idz * (std::int16_t)CHUNK_Z_BLOCK_COUNT),
+                    BLOCK_LENGTH * ((std::int16_t)z + pChunk->GetLocation().idz * (std::int16_t)CHUNK_Z_BLOCK_COUNT),
                     1.f
                 };
 

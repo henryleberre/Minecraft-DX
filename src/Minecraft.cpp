@@ -49,8 +49,6 @@ struct ChunkCoord {
     inline bool operator==(const ChunkCoord& rhs) const noexcept { return this->idx == rhs.idx && this->idz == rhs.idz; }
 }; // struct ChunkCoord
 
-#include <bitset>
-
 class ChunkCoordHash {
 public:
     inline size_t operator()(const ChunkCoord& cc) const
@@ -211,6 +209,9 @@ public:
         m_noise(std::random_device()),
         m_camera(Camera(Vec4f32{ 0.f, 40, 0.01f, 1000.f}, M_PI_2, 9.f / 16.f, 0.1f, 1000.f))
     {
+        this->m_window.ClipCursor();
+        this->m_window.HideCursor();
+
         this->m_noise.reseed(1234);
 
         DXGI_SWAP_CHAIN_DESC scd = {  };
@@ -570,12 +571,12 @@ private:
             FATAL_ERROR("Failed to create a vertex buffer");
     }
 
-    void UpdateWolrd() noexcept {
+    void UpdateWorld() noexcept {
         const Vec4f32 cameraPosition = this->m_camera.GetPosition();
 
         ChunkCoord cc;
-        for (cc.idx = (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT - RENDER_DISTANCE; cc.idx < (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idx) {
-        for (cc.idz = (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT - RENDER_DISTANCE; cc.idz < (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idz) {
+        for (cc.idx = (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT - RENDER_DISTANCE - 1; cc.idx < (cameraPosition.x/BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idx) {
+        for (cc.idz = (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT - RENDER_DISTANCE - 1; cc.idz < (cameraPosition.z/BLOCK_LENGTH) / CHUNK_Z_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idz) {
             std::optional<Chunk*> pChunkOpt = this->GetChunk(cc);
 
             if (!pChunkOpt.has_value()) {
@@ -589,7 +590,7 @@ private:
     }
 
     void Update() noexcept {
-        this->UpdateWolrd();
+        this->UpdateWorld();
 
         this->m_window.Update();
 

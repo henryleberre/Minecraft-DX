@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <array>
+#include <bitset>
 #include <chrono>
 #include <cctype>
 #include <vector>

@@ -24,7 +24,9 @@ struct Vec4f32 {
     inline float GetLength3D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z); }
     inline float GetLength4D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z + this->w*this->w); }
 
-    inline void Normalize4D() noexcept { this->operator/=(this->GetLength4D()); }
+    inline void Normalize2D() noexcept { const float l = this->GetLength2D(); this->operator/=(Vec4f32{l, l, 1.f, 1.f}); }
+    inline void Normalize3D() noexcept { const float l = this->GetLength3D(); this->operator/=(Vec4f32{l, l, l,   1.f}); }
+    inline void Normalize4D() noexcept { const float l = this->GetLength4D(); this->operator/=(l); }
 }; // struct Vec4f32
 
 inline Vec4f32 operator+(const Vec4f32& lhs, const Vec4f32& rhs) noexcept { return Vec4f32(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w); }
@@ -57,6 +59,18 @@ inline Vec4f32 CrossProduct3D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
         lhs.x * rhs.y - lhs.y * rhs.x,
         0.f
     };
+}
+
+inline Vec4f32 Normalized2D(const Vec4f32& lhs) noexcept {
+    const float l = lhs.GetLength2D();
+
+    return lhs / Vec4f32{l, l, 1.f, 1.f};
+}
+
+inline Vec4f32 Normalized3D(const Vec4f32& lhs) noexcept {
+    const float l = lhs.GetLength3D();
+
+    return lhs / Vec4f32{l, l, l, 1.f};
 }
 
 inline Vec4f32 Normalized4D(const Vec4f32& lhs) noexcept {

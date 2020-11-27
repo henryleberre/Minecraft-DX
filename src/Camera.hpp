@@ -6,8 +6,8 @@
 
 class Camera {
 private:
-    Vec4f32 m_position    = {0.f, 0.f, 0.f, 1.f};
-    Vec4f32 m_rotation    = {0.f, 0.f, 0.f, 1.f};
+    Vec4f32 m_position    = {0.f, 0.f, 0.f, 0.f};
+    Vec4f32 m_rotation    = {0.f, 0.f, 0.f, 0.f};
     float   m_fov         = static_cast<float>(M_PI_2);
     float   m_aspectRatio = 9.f / 16.f;
     float   m_zNear       = 0.1f;
@@ -19,8 +19,8 @@ private:
     // these members are calculated each call to "CalculateTransform"
     // and are used to move the camera in the right direction when
     // handling keyboard input
-    Vec4f32 m_forwardVector = {0.f, 0.f, 1.f, 1.f};
-    Vec4f32 m_rightVector   = {1.f, 0.f, 0.f, 1.f};
+    Vec4f32 m_forwardVector = {0.f, 0.f, 1.f, 0.f};
+    Vec4f32 m_rightVector   = {1.f, 0.f, 0.f, 0.f};
 
 public:
     inline Camera() noexcept = default;
@@ -50,7 +50,7 @@ public:
 
         // Calculate the transform
         const Mat4x4f32 translationMatrix = MakeTranslationMatrix(this->m_position * (-1.f));
-        const Mat4x4f32 lookAtMatrix      = MakeLookAtMatrix     (this->m_forwardVector, rotationMatrix * Vec4f32{0.f, 1.f, 0.f});
+        const Mat4x4f32 lookAtMatrix      = MakeLookAtMatrix     (this->m_forwardVector, rotationMatrix * Vec4f32{0.f, 1.f, 0.f, 0.f});
         const Mat4x4f32 perspectiveMatrix = MakePerspectiveMatrix(this->m_fov, this->m_aspectRatio, this->m_zNear, this->m_zFar);
 
         this->m_transform = translationMatrix * lookAtMatrix * perspectiveMatrix;

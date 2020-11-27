@@ -12,8 +12,16 @@ struct Mat4x4f32 {
     inline       float& operator()(const size_t r, const size_t c)       noexcept { return (*this)(r * 4u + c); }
     inline const float& operator()(const size_t r, const size_t c) const noexcept { return (*this)(r * 4u + c); }
 
+    static Mat4x4f32 Zeroes;
     static Mat4x4f32 Identity;
 }; // struct Mat4x4f32
+
+Mat4x4f32 Mat4x4f32::Zeroes = Mat4x4f32{std::array<float, 16u>{
+    0.f, 0.f, 0.f, 0.f,
+    0.f, 0.f, 0.f, 0.f,
+    0.f, 0.f, 0.f, 0.f,
+    0.f, 0.f, 0.f, 0.f,
+}};
 
 Mat4x4f32 Mat4x4f32::Identity = Mat4x4f32{std::array<float, 16u>{
     1.f, 0.f, 0.f, 0.f,
@@ -55,36 +63,36 @@ inline Mat4x4f32 MakeRotationXMatrix(const float& angle) noexcept {
     const float sinAngle = std::sinf(angle);
     const float cosAngle = std::cosf(angle);
 
-    return Mat4x4f32{
+    return Mat4x4f32{{
         1.f, 0.f,      0.f,       0.f,
 		0.f, cosAngle, -sinAngle, 0.f,
 		0.f, sinAngle, +cosAngle, 0.f,
 		0.f, 0.f,      0.f,       1.f
-    };
+    }};
 }
 
 inline Mat4x4f32 MakeRotationYMatrix(const float& angle) noexcept {
     const float sinAngle = std::sinf(angle);
     const float cosAngle = std::cosf(angle);
 
-    return Mat4x4f32{
+    return Mat4x4f32{{
         +cosAngle, 0.f, sinAngle, 0.f,
 		0.f,       1.f, 0.f,      0.f,
 		-sinAngle, 0.f, cosAngle, 0.f,
 		0.f,       0.f, 0.f,      1.f
-    };
+    }};
 }
 
 inline Mat4x4f32 MakeRotationZMatrix(const float& angle) noexcept {
     const float sinAngle = std::sinf(angle);
     const float cosAngle = std::cosf(angle);
 
-    return Mat4x4f32{
+    return Mat4x4f32{{
         cosAngle, -sinAngle, 0.f, 0.f,
         sinAngle, +cosAngle, 0.f, 0.f,
         0.f,      0.f,       1.f, 0.f,
         0.f,      0.f,       0.f, 1.f
-    };
+    }};
 }
 
 inline Mat4x4f32 MakeRotationMatrix(const Vec4f32& rotation) noexcept {
@@ -103,14 +111,14 @@ inline Mat4x4f32 MakeTranslationMatrix(const Vec4f32& translation) noexcept {
 }
 
 inline Mat4x4f32 MakeLookAtMatrix(const Vec4f32& dir, const Vec4f32& up) noexcept {
-    const Vec4f32 zaxis = Normalized4D(dir);
-	const Vec4f32 xaxis = Normalized4D(CrossProduct3D(up, zaxis));
-	const Vec4f32 yaxis = CrossProduct3D(zaxis, xaxis);
+    const Vec4f32 zAxis = Normalized3D(dir);
+	const Vec4f32 xAxis = Normalized3D(CrossProduct3D(up, zAxis));
+	const Vec4f32 yAxis = CrossProduct3D(zAxis, xAxis);
 
     return Mat4x4f32{{
-        xaxis.x, yaxis.x, zaxis.x, 0.f,
-	    xaxis.y, yaxis.y, zaxis.y, 0.f,
-		xaxis.z, yaxis.z, zaxis.z, 0.f,
+        xAxis.x, yAxis.x, zAxis.x, 0.f,
+	    xAxis.y, yAxis.y, zAxis.y, 0.f,
+		xAxis.z, yAxis.z, zAxis.z, 0.f,
 		0.f,     0.f,     0.f,     1.f
     }};
 }

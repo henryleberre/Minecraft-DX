@@ -38,7 +38,7 @@ inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
 #define CHUNK_Z_BLOCK_COUNT (16)
 #define BLOCK_LENGTH        (1.f)
 
-#define RENDER_DISTANCE (1) // in chunks
+#define RENDER_DISTANCE (2) // in chunks
 
 class Minecraft;
 

@@ -590,25 +590,29 @@ private:
     }
 
     void Update() noexcept {
-        this->UpdateWorld();
-
         this->m_window.Update();
+
+
+        this->m_camera.Rotate(Vec4f32{ (float)this->m_window.GetMouseYDelta()/1000.f, (float)this->m_window.GetMouseXDelta()/1000.f, 0.f, 0.f });
+        this->m_camera.Update();
 
         float speed = 0.1f;
         if (this->m_window.IsKeyDown('A'))
-            this->m_camera.Translate(Vec4f32(-speed, 0.f, 0.f, 0.f));
+            this->m_camera.Translate(-1.f * this->m_camera.GetRightVector() * speed);
         if (this->m_window.IsKeyDown('D'))
-            this->m_camera.Translate(Vec4f32(+speed, 0.f, 0.f, 0.f));
+            this->m_camera.Translate(this->m_camera.GetRightVector() * speed);
         if (this->m_window.IsKeyDown(VK_SPACE))
             this->m_camera.Translate(Vec4f32(0.f, speed, 0.f, 0.f));
         if (this->m_window.IsKeyDown(VK_SHIFT))
             this->m_camera.Translate(Vec4f32(0.f, -speed, 0.f, 0.f));
         if (this->m_window.IsKeyDown('W'))
-            this->m_camera.Translate(Vec4f32(0.f, 0.f, speed, 0.f));
+            this->m_camera.Translate(this->m_camera.GetForwardVector() * speed);
         if (this->m_window.IsKeyDown('S'))
-            this->m_camera.Translate(Vec4f32(0.f, 0.f, -speed, 0.f));
+            this->m_camera.Translate(-speed * this->m_camera.GetForwardVector());
 
-        this->m_camera.CalculateTransform();
+        this->m_camera.Update();
+        this->UpdateWorld();
+
 
         D3D11_MAPPED_SUBRESOURCE resource;
         if (this->m_pDeviceContext->Map(this->m_pConstantBuffer.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &resource) != S_OK)

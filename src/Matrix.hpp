@@ -33,6 +33,15 @@ inline Mat4x4f32 operator*(const Mat4x4f32& lhs, const Mat4x4f32& rhs) noexcept 
     return result;
 }
 
+inline Vec4f32 operator*(const Mat4x4f32& lhs, const Vec4f32& rhs) noexcept {
+    return Vec4f32{
+        lhs(0)  * rhs.x + lhs(1)  * rhs.y + lhs(2)  * rhs.z + lhs(3)  * rhs.w,
+        lhs(4)  * rhs.x + lhs(5)  * rhs.y + lhs(6)  * rhs.z + lhs(7)  * rhs.w,
+        lhs(8)  * rhs.x + lhs(9)  * rhs.y + lhs(10) * rhs.z + lhs(11) * rhs.w,
+        lhs(12) * rhs.x + lhs(13) * rhs.y + lhs(14) * rhs.z + lhs(15) * rhs.w
+    };
+}
+
 inline Mat4x4f32 Transposed(const Mat4x4f32& m) noexcept {
     return Mat4x4f32{ {
         m(0), m(4), m(8),  m(12),

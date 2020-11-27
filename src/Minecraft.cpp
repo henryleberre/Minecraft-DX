@@ -593,7 +593,7 @@ private:
         this->m_window.Update();
 
 
-        this->m_camera.Rotate(Vec4f32{ (float)this->m_window.GetMouseYDelta()/1000.f, (float)this->m_window.GetMouseXDelta()/1000.f, 0.f, 0.f });
+        this->m_camera.Rotate(Vec4f32{ (float)this->m_window.GetMouseYDelta()/4000.f, (float)this->m_window.GetMouseXDelta()/4000.f, 0.f, 0.f });
         this->m_camera.Update();
 
         float speed = 0.1f;

@@ -88,9 +88,9 @@ inline Mat4x4f32 MakeRotationZMatrix(const float& angle) noexcept {
 }
 
 inline Mat4x4f32 MakeRotationMatrix(const Vec4f32& rotation) noexcept {
-    return MakeRotationXMatrix(rotation.x)
+    return MakeRotationZMatrix(rotation.z)
          * MakeRotationYMatrix(rotation.y)
-         * MakeRotationZMatrix(rotation.z);
+         * MakeRotationXMatrix(rotation.x);
 }
 
 inline Mat4x4f32 MakeTranslationMatrix(const Vec4f32& translation) noexcept {
@@ -108,10 +108,10 @@ inline Mat4x4f32 MakeLookAtMatrix(const Vec4f32& dir, const Vec4f32& up) noexcep
 	const Vec4f32 yaxis = CrossProduct3D(zaxis, xaxis);
 
     return Mat4x4f32{{
-        xaxis.x, yaxis.x, zaxis.x, 0,
-	    xaxis.y, yaxis.y, zaxis.y, 0,
-		xaxis.z, yaxis.z, zaxis.z, 0,
-		0.f,     0.f,     0.f,     1
+        xaxis.x, yaxis.x, zaxis.x, 0.f,
+	    xaxis.y, yaxis.y, zaxis.y, 0.f,
+		xaxis.z, yaxis.z, zaxis.z, 0.f,
+		0.f,     0.f,     0.f,     1.f
     }};
 }
 

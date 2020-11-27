@@ -42,6 +42,48 @@ inline Mat4x4f32 Transposed(const Mat4x4f32& m) noexcept {
     } };
 }
 
+inline Mat4x4f32 MakeRotationXMatrix(const float& angle) noexcept {
+    const float sinAngle = std::sinf(angle);
+    const float cosAngle = std::cosf(angle);
+
+    return Mat4x4f32{
+        1.f, 0.f,      0.f,       0.f,
+		0.f, cosAngle, -sinAngle, 0.f,
+		0.f, sinAngle, +cosAngle, 0.f,
+		0.f, 0.f,      0.f,       1.f
+    };
+}
+
+inline Mat4x4f32 MakeRotationYMatrix(const float& angle) noexcept {
+    const float sinAngle = std::sinf(angle);
+    const float cosAngle = std::cosf(angle);
+
+    return Mat4x4f32{
+        +cosAngle, 0.f, sinAngle, 0.f,
+		0.f,       1.f, 0.f,      0.f,
+		-sinAngle, 0.f, cosAngle, 0.f,
+		0.f,       0.f, 0.f,      1.f
+    };
+}
+
+inline Mat4x4f32 MakeRotationZMatrix(const float& angle) noexcept {
+    const float sinAngle = std::sinf(angle);
+    const float cosAngle = std::cosf(angle);
+
+    return Mat4x4f32{
+        cosAngle, -sinAngle, 0.f, 0.f,
+        sinAngle, +cosAngle, 0.f, 0.f,
+        0.f,      0.f,       1.f, 0.f,
+        0.f,      0.f,       0.f, 1.f
+    };
+}
+
+inline Mat4x4f32 MakeRotationMatrix(const Vec4f32& rotation) noexcept {
+    return MakeRotationXMatrix(rotation.x)
+         * MakeRotationYMatrix(rotation.y)
+         * MakeRotationZMatrix(rotation.z);
+}
+
 inline Mat4x4f32 MakeTranslationMatrix(const Vec4f32& translation) noexcept {
     return Mat4x4f32{{
         1.f,           0.f,           0.f,           0.f,
@@ -51,9 +93,26 @@ inline Mat4x4f32 MakeTranslationMatrix(const Vec4f32& translation) noexcept {
     }};
 }
 
-inline Mat4x4f32 MakeLookAtMatrix(const Vec4f32& at, const Vec4f32& eye, const Vec4f32& up) noexcept {
-    // TODO: Implement
-    return Mat4x4f32::Identity;
+inline Mat4x4f32 MakeLookAtMatrix(const Vec4f32& dir, const Vec4f32& up) noexcept {
+    const Vec4f32 zaxis = Normalized4D(dir);
+	const Vec4f32 xaxis = Normalized4D(CrossProduct3D(up, zaxis));
+	const Vec4f32 yaxis = CrossProduct3D(zaxis, xaxis);
+
+    return Mat4x4f32{{
+        xaxis.x, yaxis.x, zaxis.x, 0,
+	    xaxis.y, yaxis.y, zaxis.y, 0,
+		xaxis.z, yaxis.z, zaxis.z, 0,
+		0.f,     0.f,     0.f,     1
+    }};
+}
+
+inline Mat4x4f32 MakePerspectiveMatrix(const float fov, const float aspectRatio, const float zNear, const float zFar) noexcept {
+    return Mat4x4f32{{
+        aspectRatio * fov, 0.f, 0.f,                              0.f,
+        0.f,               fov, 0.f,                              0.f,
+        0.f,               0.f, zFar / (zFar - zNear),            1.f,
+        0.f,               0.f, (-zFar * zNear) / (zFar - zNear), 1.f,
+    }};
 }
 
 std::ostream& operator<<(std::ostream& stream, const Mat4x4f32& m) {

@@ -50,6 +50,15 @@ inline float DotProduct4D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
     return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z + lhs.w * rhs.w;
 }
 
+inline Vec4f32 CrossProduct3D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
+    return Vec4f32{
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x,
+        0.f
+    };
+}
+
 inline Vec4f32 Normalized4D(const Vec4f32& lhs) noexcept {
     return lhs / lhs.GetLength4D();
 }

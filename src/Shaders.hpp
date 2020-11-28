@@ -1,7 +1,7 @@
 #ifndef __MINECRAFT__SHADERS_HPP
 #define __MINECRAFT__SHADERS_HPP
 
-const char* vsBlockCode = R"V0G0N(
+inline const char* vsBlockCode = R"V0G0N(
     cbuffer VS_CONSTANT_BUFFER : register(b0) {
         matrix transform;
     };
@@ -22,7 +22,7 @@ const char* vsBlockCode = R"V0G0N(
     }
 )V0G0N";
 
-const char* psBlockCode = R"V0G0N(
+inline const char* psBlockCode = R"V0G0N(
     Texture2D    textureAtlas : register(t0);
     SamplerState samplerState : register(s0);
 

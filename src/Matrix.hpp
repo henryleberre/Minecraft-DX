@@ -2,6 +2,7 @@
 #define __MINECRAFT__MATRIX_HPP
 
 #include "Pch.hpp"
+#include "Vector.hpp"
 
 struct Mat4x4f32 {
     std::array<float, 16> m = { 0.f };
@@ -15,20 +16,6 @@ struct Mat4x4f32 {
     static Mat4x4f32 Zeroes;
     static Mat4x4f32 Identity;
 }; // struct Mat4x4f32
-
-Mat4x4f32 Mat4x4f32::Zeroes = Mat4x4f32{std::array<float, 16u>{
-    0.f, 0.f, 0.f, 0.f,
-    0.f, 0.f, 0.f, 0.f,
-    0.f, 0.f, 0.f, 0.f,
-    0.f, 0.f, 0.f, 0.f,
-}};
-
-Mat4x4f32 Mat4x4f32::Identity = Mat4x4f32{std::array<float, 16u>{
-    1.f, 0.f, 0.f, 0.f,
-    0.f, 1.f, 0.f, 0.f,
-    0.f, 0.f, 1.f, 0.f,
-    0.f, 0.f, 0.f, 1.f,
-}};
 
 inline Mat4x4f32 operator*(const Mat4x4f32& lhs, const Mat4x4f32& rhs) noexcept {
     Mat4x4f32 result{};
@@ -132,7 +119,7 @@ inline Mat4x4f32 MakePerspectiveMatrix(const float fov, const float aspectRatio,
     }};
 }
 
-std::ostream& operator<<(std::ostream& stream, const Mat4x4f32& m) {
+inline std::ostream& operator<<(std::ostream& stream, const Mat4x4f32& m) {
     for (char r = 0; r < 4u; ++r) {
         for (char c = 0; c < 4u; ++c)
             stream << m(r, c) << ' ';

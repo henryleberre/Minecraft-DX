@@ -77,7 +77,7 @@ inline Vec4f32 Normalized4D(const Vec4f32& lhs) noexcept {
     return lhs / lhs.GetLength4D();
 }
 
-std::ostream& operator<<(std::ostream& stream, const Vec4f32& rhs) {
+inline std::ostream& operator<<(std::ostream& stream, const Vec4f32& rhs) {
     stream << '(' << rhs.x << ',' << rhs.y << ',' << rhs.z << ',' << rhs.w << ')';
 
     return stream;

@@ -1,132 +1,14 @@
 #include "Pch.hpp"
+#include "Image.hpp"
 #include "Chunk.hpp"
 #include "Block.hpp"
 #include "Window.hpp"
 #include "Vector.hpp"
 #include "Matrix.hpp"
 #include "Camera.hpp"
+#include "Shaders.hpp"
+#include "Constants.hpp"
 #include "vendor/PerlinNoise.hpp"
-
-#define CHUNK_X_BLOCK_COUNT (16)
-#define CHUNK_Y_BLOCK_COUNT (255)
-#define CHUNK_Z_BLOCK_COUNT (16)
-#define BLOCK_LENGTH        (1.f)
-
-#define RENDER_DISTANCE (10) // in chunks
-
-class Minecraft;
-
-class Chunk {
-    friend Minecraft;
-private:
-    ChunkCoord m_location;
-
-    std::array<std::array<std::array<BLOCK_TYPE, CHUNK_Z_BLOCK_COUNT>, CHUNK_Y_BLOCK_COUNT>, CHUNK_X_BLOCK_COUNT> m_blocks = { BLOCK_TYPE::BLOCK_TYPE_AIR };
-
-public:
-    inline Chunk() noexcept = default;
-
-    inline Chunk(const ChunkCoord& location) noexcept
-        : m_location(location)
-    {  }
-
-    inline ChunkCoord GetLocation() const noexcept { return this->m_location; }
-
-    inline std::optional<const BLOCK_TYPE*> GetBlock(const size_t idx, const size_t idy, const size_t idz) const noexcept {
-        if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
-            return &this->m_blocks[idx][idy][idz];
-        }
-
-        return {  };
-    }
-
-    inline std::optional<BLOCK_TYPE*> GetBlock(const size_t idx, const size_t idy, const size_t idz) noexcept {
-        if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
-            return &this->m_blocks[idx][idy][idz];
-        }
-
-        return {  };
-    }
-
-    inline void SetBlock(const size_t idx, const size_t idy, const size_t idz, const BLOCK_TYPE& type) noexcept {
-        if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
-            this->m_blocks[idx][idy][idz] = type;
-        }
-    }
-
-    void GenerateDefaultTerrain(const siv::PerlinNoise& noise) noexcept {
-        std::memset(this->m_blocks.data(), (int)BLOCK_TYPE::BLOCK_TYPE_AIR, this->m_blocks.size() * sizeof(BLOCK_TYPE));
-
-        for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
-        for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
-        
-        const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + (std::int16_t)x) / 50.f,
-                                                                                  (this->m_location.idz * CHUNK_X_BLOCK_COUNT + (std::int16_t)z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
-
-        for (size_t y = 0u; y <= yMax; ++y) {
-            if (y == yMax) {
-                if (y > CHUNK_Y_BLOCK_COUNT / 5) this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_GRASS;
-                else this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_SAND;
-            } else if (y > yMax - 2)
-                this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_DIRT;
-            else
-                this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_STONE;
-        }
-        }
-        }
-    }
-}; // class Chunk
-
-struct ChunkRenderData {
-    Microsoft::WRL::ComPtr<ID3D11Buffer> pVertexBuffer;
-    size_t nVertices;
-};
-
-class Image {
-private:
-    std::unique_ptr<Coloru8[]> m_pBuffer;
-
-    UINT m_width, m_height, m_nPixels;
-
-public:
-    inline Image() noexcept = default;
-
-    Image(const wchar_t* filename) noexcept {
-        Microsoft::WRL::ComPtr<IWICBitmapSource>      decodedConvertedFrame;
-		Microsoft::WRL::ComPtr<IWICBitmapDecoder>     bitmapDecoder;
-		Microsoft::WRL::ComPtr<IWICImagingFactory>    factory;
-		Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frameDecoder;
-
-		if (CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory)))
-			FATAL_ERROR("Failed to create IWICImagingFactory");
-
-		if (factory->CreateDecoderFromFilename(filename, NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &bitmapDecoder))
-			FATAL_ERROR("Failed to CreateDecoderFromFilename");
-
-		if (bitmapDecoder->GetFrame(0, &frameDecoder))
-			FATAL_ERROR("Failed to GetFrame the first frame of an image");
-
-		if (frameDecoder->GetSize((UINT*)&this->m_width, (UINT*)&this->m_height))
-			FATAL_ERROR("Failed to GetSize of an image");
-
-		this->m_nPixels = this->m_width * this->m_height;
-		if (WICConvertBitmapSource(GUID_WICPixelFormat32bppRGBA, frameDecoder.Get(), &decodedConvertedFrame))
-			FATAL_ERROR("Failed to WICConvertBitmapSource");
-
-		this->m_pBuffer = std::make_unique<Coloru8[]>(this->m_nPixels * sizeof(Coloru8));
-		const WICRect sampleRect{ 0, 0, static_cast<INT>(this->m_width), static_cast<INT>(this->m_height) };
-		if (decodedConvertedFrame->CopyPixels(&sampleRect, this->m_width * sizeof(Coloru8), this->m_nPixels * sizeof(Coloru8), (BYTE*)this->m_pBuffer.get()))
-			FATAL_ERROR("Failed to CopyPixels from an image");
-    }
-
-    inline UINT     GetWidth()         const noexcept { return this->m_width;         }
-    inline UINT     GetHeight()        const noexcept { return this->m_height;        }
-    inline UINT     GetPixelCount()    const noexcept { return this->m_nPixels;       }
-    inline Coloru8* GetBufferPointer() const noexcept { return this->m_pBuffer.get(); }
-};
-
-template <typename T>
-using ChunkCoordMap = std::unordered_map<ChunkCoord, T, ChunkCoordHash>;
 
 class Minecraft {
 private:
@@ -205,46 +87,17 @@ public:
         this->m_pDeviceContext->RSSetViewports(1u, &vp);
 
         Microsoft::WRL::ComPtr<ID3DBlob> pErrorBlob;
-
-        const char* vsShaderCode = R"V0G0N(
-            cbuffer VS_CONSTANT_BUFFER : register(b0) {
-                matrix transform;
-            };
-
-            struct VS_OUTPUT {
-                float4 position : SV_POSITION;
-                float2 uv : UV;
-                float lighting : LIGHTING;
-            };
-
-            VS_OUTPUT main(float4 position : POSITION, float2 uv : UV, float lighting : LIGHTING) {
-                VS_OUTPUT result;
-                result.position = mul(transform, position);
-                result.uv = uv;
-                result.lighting = lighting;
-
-                return result;
-            }
-        )V0G0N";
         Microsoft::WRL::ComPtr<ID3DBlob> pVShaderByteCode;
 
-        if (D3DCompile(vsShaderCode, strlen(vsShaderCode), nullptr, nullptr, nullptr, "main", "vs_5_0", 0, 0, &pVShaderByteCode, &pErrorBlob) != S_OK)
+        if (D3DCompile(vsBlockCode, strlen(vsBlockCode), nullptr, nullptr, nullptr, "main", "vs_5_0", 0, 0, &pVShaderByteCode, &pErrorBlob) != S_OK)
             FATAL_ERROR("Failed to compile a vertex shader");
 
         if (this->m_pDevice->CreateVertexShader(pVShaderByteCode->GetBufferPointer(), pVShaderByteCode->GetBufferSize(), nullptr, &this->m_pVertexShader) != S_OK)
             FATAL_ERROR("Failed to create a vertex shader");
 
-        const char* psShaderCode = R"V0G0N(
-            Texture2D textureAtlas : register(t0);
-            SamplerState samplerState : register(s0);
-
-            float4 main(float4 position : POSITION, float2 uv : UV, float lighting : LIGHTING) : SV_TARGET {
-                return float4(textureAtlas.Sample(samplerState, uv).xyz * lighting, 1.0f);
-            }
-        )V0G0N";
         Microsoft::WRL::ComPtr<ID3DBlob> pPShaderByteCode;
 
-        if (D3DCompile(psShaderCode, strlen(psShaderCode), nullptr, nullptr, nullptr, "main", "ps_5_0", 0, 0, &pPShaderByteCode, &pErrorBlob) != S_OK)
+        if (D3DCompile(psBlockCode, strlen(psBlockCode), nullptr, nullptr, nullptr, "main", "ps_5_0", 0, 0, &pPShaderByteCode, &pErrorBlob) != S_OK)
             FATAL_ERROR("Failed to compile a vertex shader");
 
         if (this->m_pDevice->CreatePixelShader(pPShaderByteCode->GetBufferPointer(), pPShaderByteCode->GetBufferSize(), nullptr, &this->m_pPixelShader) != S_OK)

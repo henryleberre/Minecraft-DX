@@ -37,8 +37,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pTextureAtlasSRV;
     Microsoft::WRL::ComPtr<ID3D11SamplerState>       m_pTextureAtlasSamplerState;
 
+    // Contains all chunks that have been created since the beginning
     ChunkCoordMap<std::unique_ptr<Chunk>> m_pChunks;
 
+    // Contains all the chunks that are scheduled to be rendered
     std::vector<Chunk*> m_pChunksToRender;
 
     siv::PerlinNoise m_noise;

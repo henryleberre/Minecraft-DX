@@ -10,17 +10,20 @@ Minecraft::Minecraft() noexcept : m_window("Minecraft", 1920u, 1080u),
     this->m_noise.reseed(1234);
 
     DXGI_SWAP_CHAIN_DESC scd = {};
-    scd.BufferCount = 1u;
-    scd.BufferDesc.Width = this->m_window.GetWidth();
+    scd.BufferCount = 2u;
+    scd.BufferDesc.Width  = this->m_window.GetWidth();
     scd.BufferDesc.Height = this->m_window.GetHeight();
     scd.BufferDesc.Format = DXGI_FORMAT::DXGI_FORMAT_R8G8B8A8_UNORM;
-    scd.BufferDesc.RefreshRate.Numerator = 60;
+    scd.BufferDesc.RefreshRate.Numerator   = 0;
     scd.BufferDesc.RefreshRate.Denominator = 1;
-    scd.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_SEQUENTIAL;
+    scd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+    scd.BufferDesc.Scaling = DXGI_MODE_SCALING::DXGI_MODE_SCALING_UNSPECIFIED;
+    scd.SwapEffect = DXGI_SWAP_EFFECT::DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.OutputWindow = this->m_window.GetHandle();
     scd.SampleDesc.Count = 1;
     scd.SampleDesc.Quality = 0;
+    scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
     scd.Windowed = true;
 
     if (D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE::D3D_DRIVER_TYPE_HARDWARE, NULL, 0u, nullptr, 0u, D3D11_SDK_VERSION, &scd, &this->m_pSwapChain, &this->m_pDevice, NULL, &m_pDeviceContext) != S_OK)
@@ -212,6 +215,9 @@ void Minecraft::UpdateWorld() noexcept
     this->m_pChunksToRender.clear();
 
     
+    // Since generating meshes takes quite a long time, we want to generate at most 1 chunk's mesh per frame
+    // this smooths out the generation and limits stutters caused by this operation
+    bool bStopGeneratingMeshes = false;
 
     ChunkCoord cc;
     for (cc.idx = (cameraPosition.x / BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT - RENDER_DISTANCE - 1; cc.idx < (cameraPosition.x / BLOCK_LENGTH) / CHUNK_X_BLOCK_COUNT + RENDER_DISTANCE; ++cc.idx) {
@@ -223,12 +229,16 @@ void Minecraft::UpdateWorld() noexcept
                 pChunkOpt = this->GetChunk(cc);
                 
                 pChunkOpt.value()->GenerateDefaultTerrain(this->m_noise);
+                bStopGeneratingMeshes = true;
             }
 
-            if (!pChunkOpt.value()->HasDXMesh())
+            if (!pChunkOpt.value()->HasDXMesh() && !bStopGeneratingMeshes) {
                 pChunkOpt.value()->GenerateDXMesh(this->m_pDevice, this->m_textureAtlasImage.GetWidth(), this->m_textureAtlasImage.GetHeight());
-
-            this->m_pChunksToRender.push_back(pChunkOpt.value());
+                bStopGeneratingMeshes = true;
+            }
+            
+            if (pChunkOpt.value()->HasDXMesh())
+                this->m_pChunksToRender.push_back(pChunkOpt.value());
         }
     }
 }
@@ -293,5 +303,5 @@ void Minecraft::Render() noexcept
         this->m_pDeviceContext->Draw(static_cast<UINT>(pChunk->m_dxData.value().nVertices), 0u);
     }
 
-    this->m_pSwapChain->Present(1u, 0u);
+    this->m_pSwapChain->Present(0u, 0u);
 }

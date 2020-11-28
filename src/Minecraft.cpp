@@ -22,7 +22,7 @@ std::ostream& operator<<(std::ostream& stream, const Vertex& v) noexcept {
 }
 
 enum class BlockType : std::uint8_t {
-    STONE = 0u, DIRT, GRASS, AIR
+    STONE = 0u, DIRT, GRASS, SAND, WATER, AIR
 }; // enum class BlockType
 
 enum class BlockFace : std::uint8_t {
@@ -38,7 +38,7 @@ inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
 #define CHUNK_Z_BLOCK_COUNT (16)
 #define BLOCK_LENGTH        (1.f)
 
-#define RENDER_DISTANCE (2) // in chunks
+#define RENDER_DISTANCE (10) // in chunks
 
 class Minecraft;
 
@@ -101,19 +101,24 @@ public:
     void GenerateDefaultTerrain(const siv::PerlinNoise& noise) noexcept {
         for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
         for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
-        for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
-            const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + (std::int16_t)x) / 50.f,
-                                                                                      (this->m_location.idz * CHUNK_X_BLOCK_COUNT + (std::int16_t)z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
+        
+        const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + (std::int16_t)x) / 50.f,
+                                                                                  (this->m_location.idz * CHUNK_X_BLOCK_COUNT + (std::int16_t)z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
 
-            if (y < yMax) {
-                if (y < yMax - 5)
-                    this->m_blocks[x][y][z] = BlockType::STONE;
-                else if (y < yMax - 1) 
+        for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
+            if (y == yMax) {
+                if (y > CHUNK_Y_BLOCK_COUNT / 5) this->m_blocks[x][y][z] = BlockType::GRASS;
+                else this->m_blocks[x][y][z] = BlockType::SAND;
+            } else if (y < yMax) {
+                if (y > yMax - 2)
                     this->m_blocks[x][y][z] = BlockType::DIRT;
                 else
-                    this->m_blocks[x][y][z] = BlockType::GRASS;
+                    this->m_blocks[x][y][z] = BlockType::STONE;
             } else {
-                this->m_blocks[x][y][z] = BlockType::AIR;
+                if (y <= CHUNK_Y_BLOCK_COUNT / 5)
+                    this->m_blocks[x][y][z] = BlockType::WATER;
+                else
+                    this->m_blocks[x][y][z] = BlockType::AIR;
             }
         }
         }
@@ -205,7 +210,7 @@ private:
 
 public:
     Minecraft() noexcept :
-        m_window("Minecraft", 1920u / 2, 1080u / 2),
+        m_window("Minecraft", 1920u, 1080u),
         m_noise(std::random_device()),
         m_camera(Camera(Vec4f32{ 0.f, 40, 0.01f, 1000.f}, M_PI_2, 9.f / 16.f, 0.1f, 1000.f))
     {

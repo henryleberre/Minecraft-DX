@@ -43,6 +43,10 @@ public:
     inline Mat4x4f32 GetTransform() const noexcept { return this->m_transform; }
 
     void Update() noexcept {
+        // Clamp rotation
+        if (this->m_rotation.x > +M_PI_2) { this->m_rotation.x = +M_PI_2; }
+        if (this->m_rotation.x < -M_PI_2) { this->m_rotation.x = -M_PI_2; }
+
         // Set member variables
         const Mat4x4f32 rotationMatrix = MakeRotationMatrix(this->m_rotation);
         this->m_forwardVector = rotationMatrix * Vec4f32{0.f, 0.f, 1.f, 0.f};

@@ -1,37 +1,11 @@
 #include "Pch.hpp"
+#include "Chunk.hpp"
+#include "Block.hpp"
 #include "Window.hpp"
 #include "Vector.hpp"
 #include "Matrix.hpp"
 #include "Camera.hpp"
 #include "vendor/PerlinNoise.hpp"
-
-struct UV {
-    float u, v;
-}; // struct UV
-
-struct Vertex {
-    Vec4f32 position;
-    UV      uv;
-    float   lighting = 1.0f;
-}; // struct Vertex
-
-std::ostream& operator<<(std::ostream& stream, const Vertex& v) noexcept {
-    stream << v.position;
-
-    return stream;
-}
-
-enum class BlockType : std::uint8_t {
-    STONE = 0u, DIRT, GRASS, SAND, WATER, AIR
-}; // enum class BlockType
-
-enum class BlockFace : std::uint8_t {
-    TOP = 0u, FRONT, LEFT, RIGHT, BACK, BOTTOM
-}; // enum class BlockFace
-
-inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
-    return blockType == BlockType::AIR;
-}
 
 #define CHUNK_X_BLOCK_COUNT (16)
 #define CHUNK_Y_BLOCK_COUNT (255)
@@ -42,30 +16,12 @@ inline bool IsBlockTransparent(const BlockType& blockType) noexcept {
 
 class Minecraft;
 
-struct ChunkCoord {
-    std::int16_t idx;
-    std::int16_t idz;
-
-    inline bool operator==(const ChunkCoord& rhs) const noexcept { return this->idx == rhs.idx && this->idz == rhs.idz; }
-}; // struct ChunkCoord
-
-class ChunkCoordHash {
-public:
-    inline size_t operator()(const ChunkCoord& cc) const
-    {
-        const std::uint16_t a = ((cc.idx < 0 ? (static_cast<std::uint16_t>(1u) << 15) : 0) | static_cast<std::uint16_t>(std::abs(cc.idx)));
-        const std::uint16_t b = ((cc.idz < 0 ? (static_cast<std::uint16_t>(1u) << 15) : 0) | static_cast<std::uint16_t>(std::abs(cc.idz)));
-
-        return (static_cast<std::uint32_t>(a) << 16u) | static_cast<std::uint32_t>(b);
-    }
-};
-
 class Chunk {
     friend Minecraft;
 private:
     ChunkCoord m_location;
 
-    std::array<std::array<std::array<BlockType, CHUNK_Z_BLOCK_COUNT>, CHUNK_Y_BLOCK_COUNT>, CHUNK_X_BLOCK_COUNT> m_blocks = { BlockType::AIR };
+    std::array<std::array<std::array<BLOCK_TYPE, CHUNK_Z_BLOCK_COUNT>, CHUNK_Y_BLOCK_COUNT>, CHUNK_X_BLOCK_COUNT> m_blocks = { BLOCK_TYPE::BLOCK_TYPE_AIR };
 
 public:
     inline Chunk() noexcept = default;
@@ -76,7 +32,7 @@ public:
 
     inline ChunkCoord GetLocation() const noexcept { return this->m_location; }
 
-    inline std::optional<const BlockType*> GetBlock(const size_t idx, const size_t idy, const size_t idz) const noexcept {
+    inline std::optional<const BLOCK_TYPE*> GetBlock(const size_t idx, const size_t idy, const size_t idz) const noexcept {
         if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
             return &this->m_blocks[idx][idy][idz];
         }
@@ -84,7 +40,7 @@ public:
         return {  };
     }
 
-    inline std::optional<BlockType*> GetBlock(const size_t idx, const size_t idy, const size_t idz) noexcept {
+    inline std::optional<BLOCK_TYPE*> GetBlock(const size_t idx, const size_t idy, const size_t idz) noexcept {
         if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
             return &this->m_blocks[idx][idy][idz];
         }
@@ -92,34 +48,29 @@ public:
         return {  };
     }
 
-    inline void SetBlock(const size_t idx, const size_t idy, const size_t idz, const BlockType& type) noexcept {
+    inline void SetBlock(const size_t idx, const size_t idy, const size_t idz, const BLOCK_TYPE& type) noexcept {
         if (idx >= 0 && idy >= 0 && idz >= 0 && idx < CHUNK_X_BLOCK_COUNT && idy < CHUNK_Y_BLOCK_COUNT && idz < CHUNK_Z_BLOCK_COUNT) {
             this->m_blocks[idx][idy][idz] = type;
         }
     }
 
     void GenerateDefaultTerrain(const siv::PerlinNoise& noise) noexcept {
+        std::memset(this->m_blocks.data(), (int)BLOCK_TYPE::BLOCK_TYPE_AIR, this->m_blocks.size() * sizeof(BLOCK_TYPE));
+
         for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
         for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
         
         const size_t yMax = static_cast<size_t>(noise.normalizedOctaveNoise2D_0_1((this->m_location.idx * CHUNK_X_BLOCK_COUNT + (std::int16_t)x) / 50.f,
                                                                                   (this->m_location.idz * CHUNK_X_BLOCK_COUNT + (std::int16_t)z) / 50.f, 3) * CHUNK_Y_BLOCK_COUNT / 2u);
 
-        for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
+        for (size_t y = 0u; y <= yMax; ++y) {
             if (y == yMax) {
-                if (y > CHUNK_Y_BLOCK_COUNT / 5) this->m_blocks[x][y][z] = BlockType::GRASS;
-                else this->m_blocks[x][y][z] = BlockType::SAND;
-            } else if (y < yMax) {
-                if (y > yMax - 2)
-                    this->m_blocks[x][y][z] = BlockType::DIRT;
-                else
-                    this->m_blocks[x][y][z] = BlockType::STONE;
-            } else {
-                if (y <= CHUNK_Y_BLOCK_COUNT / 5)
-                    this->m_blocks[x][y][z] = BlockType::WATER;
-                else
-                    this->m_blocks[x][y][z] = BlockType::AIR;
-            }
+                if (y > CHUNK_Y_BLOCK_COUNT / 5) this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_GRASS;
+                else this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_SAND;
+            } else if (y > yMax - 2)
+                this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_DIRT;
+            else
+                this->m_blocks[x][y][z] = BLOCK_TYPE::BLOCK_TYPE_STONE;
         }
         }
         }
@@ -442,7 +393,7 @@ private:
         return {  };
     }
 
-    std::optional<BlockType*> GetBlock(const ChunkCoord& chunkLocation, const size_t idx, const size_t idy, const size_t idz) noexcept {
+    std::optional<BLOCK_TYPE*> GetBlock(const ChunkCoord& chunkLocation, const size_t idx, const size_t idy, const size_t idz) noexcept {
         const std::optional<Chunk*>& chunkOpt = this->GetChunk(chunkLocation);
 
         if (!chunkOpt.has_value()) return {  };
@@ -450,7 +401,7 @@ private:
         return chunkOpt.value()->GetBlock(idx, idy, idz);
     }
 
-    std::optional<BlockType*> GetBlock(const std::int16_t worldX, const std::int16_t worldY, const std::int16_t worldZ) noexcept {
+    std::optional<BLOCK_TYPE*> GetBlock(const std::int16_t worldX, const std::int16_t worldY, const std::int16_t worldZ) noexcept {
         ChunkCoord cc{
             worldX / CHUNK_X_BLOCK_COUNT,
             worldZ / CHUNK_Z_BLOCK_COUNT
@@ -463,14 +414,19 @@ private:
         std::vector<Vertex> vertices(CHUNK_X_BLOCK_COUNT * CHUNK_Y_BLOCK_COUNT * CHUNK_Z_BLOCK_COUNT * 3u);
         size_t nVertices = 0u;
 
-        BlockType airBlock = BlockType::AIR;
+        BLOCK_TYPE dummyAirBlock = BLOCK_TYPE::BLOCK_TYPE_AIR;
+
+        const UV uvTextureSize = {
+            16.f / this->m_textureAtlasImage.GetWidth(),
+            16.f / this->m_textureAtlasImage.GetHeight()
+        };
 
         for (size_t x = 0u; x < CHUNK_X_BLOCK_COUNT; ++x) {
         for (size_t y = 0u; y < CHUNK_Y_BLOCK_COUNT; ++y) {
         for (size_t z = 0u; z < CHUNK_Z_BLOCK_COUNT; ++z) {
-            const BlockType& block = *pChunk->GetBlock(x, y, z).value();
+            const BLOCK_TYPE& blockType = *pChunk->GetBlock(x, y, z).value();
 
-            if (!IsBlockTransparent(block)) {
+            if (IsBlockOpaque(blockType)) {
                 // top left corner point of the current block
                 const Vec4f32 baseCornerPoint = {
                     BLOCK_LENGTH * ((std::int16_t)x + pChunk->GetLocation().idx * (std::int16_t)CHUNK_X_BLOCK_COUNT),
@@ -479,74 +435,66 @@ private:
                     1.f
                 };
 
-                const float baseUInc = 16.f / this->m_textureAtlasImage.GetWidth();
-                const float baseVInc = 16.f / this->m_textureAtlasImage.GetHeight();
-
-                const float baseU = static_cast<float>(block) * baseUInc;
-
                 // in clockwise order with "a" in the top left position
-                const auto AddFace = [baseUInc, baseVInc, &nVertices, &baseU, &vertices, this](const Vec4f32& a, const Vec4f32& b, const Vec4f32& c, const Vec4f32& e, const BlockFace& face) {
-                    const float baseV = static_cast<float>(face) * baseVInc;
+                const auto AddFace = [&uvTextureSize, &nVertices, &blockType, &vertices, this](const Vec4f32& a, const Vec4f32& b, const Vec4f32& c, const Vec4f32& e, const BLOCK_FACE& blockFace) {
+                    const UV    baseFaceUV   = GetBlockFaceBaseUV(blockType, blockFace, uvTextureSize);
+                    const float faceLighting = GetBlockFaceLighting(blockFace);
 
-                    float lightingPerFace[6] = { 1.0f, 0.9f, 0.5f, 0.9f, 0.5f, 0.25f };
+                    vertices[nVertices++] = Vertex{a, UV{baseFaceUV.u,                   baseFaceUV.v},                   faceLighting};
+                    vertices[nVertices++] = Vertex{b, UV{baseFaceUV.u + uvTextureSize.u, baseFaceUV.v},                   faceLighting};
+                    vertices[nVertices++] = Vertex{c, UV{baseFaceUV.u + uvTextureSize.u, baseFaceUV.v + uvTextureSize.v}, faceLighting};
 
-                    const float faceLighting = lightingPerFace[static_cast<std::uint8_t>(face)];
-
-                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV},            faceLighting};
-                    vertices[nVertices++] = Vertex{b, UV{baseU + baseUInc, baseV},            faceLighting};
-                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}, faceLighting};
-
-                    vertices[nVertices++] = Vertex{a, UV{baseU,            baseV},            faceLighting};
-                    vertices[nVertices++] = Vertex{c, UV{baseU + baseUInc, baseV + baseVInc}, faceLighting};
-                    vertices[nVertices++] = Vertex{e, UV{baseU,            baseV + baseVInc}, faceLighting};
+                    vertices[nVertices++] = Vertex{a, UV{baseFaceUV.u,                   baseFaceUV.v},                   faceLighting};
+                    vertices[nVertices++] = Vertex{c, UV{baseFaceUV.u + uvTextureSize.u, baseFaceUV.v + uvTextureSize.v}, faceLighting};
+                    vertices[nVertices++] = Vertex{e, UV{baseFaceUV.u,                   baseFaceUV.v + uvTextureSize.v}, faceLighting};
                 };
 
                 // Front
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x, y, z - 1).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x, y, z - 1).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint,
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0},
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0},
-                            baseCornerPoint + Vec4f32{+0.f,          -BLOCK_LENGTH, +0}, BlockFace::FRONT);               
+                            baseCornerPoint + Vec4f32{+0.f,          -BLOCK_LENGTH, +0}, BLOCK_FACE::BLOCK_FACE_FRONT);               
                 }
 
                 // Back
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x, y, z + 1).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x, y, z + 1).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+0,            +0,            +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+0.f,          -BLOCK_LENGTH, +BLOCK_LENGTH},
-                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}, BlockFace::FRONT);               
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH}, BLOCK_FACE::BLOCK_FACE_FRONT);               
                 }
 
                 // Left
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x - 1, y, z).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x - 1, y, z).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint + Vec4f32{0, +0,            +BLOCK_LENGTH},
                             baseCornerPoint,
                             baseCornerPoint + Vec4f32{0, -BLOCK_LENGTH, +0},
-                            baseCornerPoint + Vec4f32{0, -BLOCK_LENGTH, +BLOCK_LENGTH}, BlockFace::LEFT);               
+                            baseCornerPoint + Vec4f32{0, -BLOCK_LENGTH, +BLOCK_LENGTH}, BLOCK_FACE::BLOCK_FACE_LEFT);               
                 }
 
                 // Right
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x + 1, y, z).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x + 1, y, z).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +0},       
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0,            +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH},
-                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BlockFace::RIGHT);
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BLOCK_FACE::BLOCK_FACE_RIGHT);
                 }
                 
                 // Top
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x, y + 1, z).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x, y + 1, z).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint + Vec4f32{+0,            +0, +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+BLOCK_LENGTH, +0, +0},
-                            baseCornerPoint, BlockFace::TOP);
+                            baseCornerPoint, BLOCK_FACE::BLOCK_FACE_TOP);
                 }
 
                 // Bottom
-                if (IsBlockTransparent(*this->GetBlock(pChunk->GetLocation(), x, y - 1, z).value_or(&airBlock))) {
+                if (!IsBlockOpaque(*this->GetBlock(pChunk->GetLocation(), x, y - 1, z).value_or(&dummyAirBlock))) {
                     AddFace(baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +BLOCK_LENGTH},
                             baseCornerPoint + Vec4f32{+0,            -BLOCK_LENGTH, +0},
-                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BlockFace::TOP);
+                            baseCornerPoint + Vec4f32{+BLOCK_LENGTH, -BLOCK_LENGTH, +0}, BLOCK_FACE::BLOCK_FACE_BOTTOM);
                 }
             }
         }

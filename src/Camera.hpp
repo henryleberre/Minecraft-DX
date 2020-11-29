@@ -1,8 +1,55 @@
 #ifndef __MINECRAFT__CAMERA_HPP
 #define __MINECRAFT__CAMERA_HPP
 
+#include "Chunk.hpp"
 #include "Vector.hpp"
 #include "Matrix.hpp"
+
+typedef Vec4f32 CameraFrustumPlane;
+
+enum class CAMERA_FRUSTUM_PLANE {
+    CAMERA_FRUSTUM_PLANE_TOP = 0u,
+    CAMERA_FRUSTUM_PLANE_NEAR,
+    CAMERA_FRUSTUM_PLANE_LEFT,
+    CAMERA_FRUSTUM_PLANE_RIGHT,
+    CAMERA_FRUSTUM_PLANE_FAR,
+    CAMERA_FRUSTUM_PLANE_BOTTOM,
+
+    _COUNT
+}; // enum class CAMERA_FRUSTUM_PLANE
+
+struct CameraFrustum {
+    std::array<CameraFrustumPlane, static_cast<std::size_t>(CAMERA_FRUSTUM_PLANE::_COUNT)> planes;
+
+    inline bool IsChunkInFrustum(const Chunk& chunk) const noexcept {
+        const auto& cc = chunk.GetLocation();
+
+        Vec4f32 chunkCenterXZAxis = {
+            (static_cast<float>(cc.idx) + 0.5f) * CHUNK_X_BLOCK_COUNT * BLOCK_LENGTH,
+            CHUNK_Y_BLOCK_COUNT / 2.f,
+            (static_cast<float>(cc.idz) + 0.5f) * CHUNK_Z_BLOCK_COUNT * BLOCK_LENGTH
+        };
+
+        std::array<Vec4f32, 1u> testPoints = { chunkCenterXZAxis };
+
+        for (const Vec4f32& point : testPoints) {
+            for (const CameraFrustumPlane& plane : this->planes) {
+                if (DotProduct3D(point, plane) + plane.w <= 0)
+                    return false;
+            }
+        }
+        
+        return true;
+    }
+
+    inline const CameraFrustumPlane& operator()(const CAMERA_FRUSTUM_PLANE& planeLocation) const noexcept {
+        return this->planes[static_cast<std::size_t>(planeLocation)];
+    }
+
+    inline CameraFrustumPlane& operator()(const CAMERA_FRUSTUM_PLANE& planeLocation) noexcept {
+        return this->planes[static_cast<std::size_t>(planeLocation)];
+    }
+}; // struct CameraFrustum
 
 class Camera {
 private:
@@ -22,6 +69,8 @@ private:
     Vec4f32 m_forwardVector = {0.f, 0.f, 1.f, 0.f};
     Vec4f32 m_rightVector   = {1.f, 0.f, 0.f, 0.f};
 
+    CameraFrustum m_frustum;
+
 public:
     inline Camera() noexcept = default;
 
@@ -40,25 +89,10 @@ public:
     inline void Rotate     (const Vec4f32& delta)    noexcept { this->m_rotation += delta;    }
     inline void SetRotation(const Vec4f32& rotation) noexcept { this->m_rotation  = rotation; }
 
-    inline Mat4x4f32 GetTransform() const noexcept { return this->m_transform; }
+    inline Mat4x4f32     GetTransform() const noexcept { return this->m_transform; }
+    inline CameraFrustum GetFrustum()   const noexcept { return this->m_frustum;   }
 
-    void Update() noexcept {
-        // Clamp rotation
-        if (this->m_rotation.x > +M_PI_2) { this->m_rotation.x = +M_PI_2; }
-        if (this->m_rotation.x < -M_PI_2) { this->m_rotation.x = -M_PI_2; }
-
-        // Set member variables
-        const Mat4x4f32 rotationMatrix = MakeRotationMatrix(this->m_rotation);
-        this->m_forwardVector = rotationMatrix * Vec4f32{0.f, 0.f, 1.f, 0.f};
-        this->m_rightVector   = rotationMatrix * Vec4f32{1.f, 0.f, 0.f, 0.f};
-
-        // Calculate the transform
-        const Mat4x4f32 translationMatrix = MakeTranslationMatrix(this->m_position * (-1.f));
-        const Mat4x4f32 lookAtMatrix      = MakeLookAtMatrix     (this->m_forwardVector, rotationMatrix * Vec4f32{0.f, 1.f, 0.f, 0.f});
-        const Mat4x4f32 perspectiveMatrix = MakePerspectiveMatrix(this->m_fov, this->m_aspectRatio, this->m_zNear, this->m_zFar);
-
-        this->m_transform = translationMatrix * lookAtMatrix * perspectiveMatrix;
-    }
+    void Update() noexcept;
 };
 
 #endif // __MINECRAFT__CAMERA_HPP

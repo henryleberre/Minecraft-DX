@@ -297,11 +297,20 @@ void Minecraft::Render() noexcept
 
     this->m_pDeviceContext->PSSetSamplers(0u, 1u, this->m_pTextureAtlasSamplerState.GetAddressOf());
     this->m_pDeviceContext->PSSetShaderResources(0u, 1u, this->m_pTextureAtlasSRV.GetAddressOf());
+
+    //size_t i = 0;
     for (const Chunk* pChunk : this->m_pChunksToRender)
     {
+        //if (!this->m_camera.GetFrustum().IsChunkInFrustum(*pChunk)) {
+        //    continue;
+        //}
+
         this->m_pDeviceContext->IASetVertexBuffers(0u, 1u, pChunk->m_dxData.value().pVertexBuffer.GetAddressOf(), &stride, &offset);
         this->m_pDeviceContext->Draw(static_cast<UINT>(pChunk->m_dxData.value().nVertices), 0u);
+    //    i++;
     }
 
-    this->m_pSwapChain->Present(0u, 0u);
+//    std::cout << (static_cast<float>(i) / this->m_pChunksToRender.size()) * 100.f << '\n';
+
+    this->m_pSwapChain->Present(1u, 0u);
 }

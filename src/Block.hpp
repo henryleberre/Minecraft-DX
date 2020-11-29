@@ -14,24 +14,36 @@ struct Vertex {
 }; // struct Vertex
 
 enum class BLOCK_FACE : std::uint8_t {
-    BLOCK_FACE_TOP = 0u, BLOCK_FACE_FRONT, BLOCK_FACE_LEFT, BLOCK_FACE_RIGHT, BLOCK_FACE_BACK, BLOCK_FACE_BOTTOM,
+    BLOCK_FACE_TOP = 0u,
+    BLOCK_FACE_FRONT,
+    BLOCK_FACE_LEFT,
+    BLOCK_FACE_RIGHT,
+    BLOCK_FACE_BACK,
+    BLOCK_FACE_BOTTOM,
 
     _COUNT
 }; // enum class BlockFace
 
 enum class BLOCK_VISIBILITY : std::uint8_t {
-    BLOCK_VISIBILITY_OPAQUE = 0u, BLOCK_VISIBILITY_TRANSPARENT, BLOCK_VISIBILITY_TRANSLUCENT
+    BLOCK_VISIBILITY_OPAQUE = 0u,
+    BLOCK_VISIBILITY_TRANSPARENT,
+    BLOCK_VISIBILITY_TRANSLUCENT
 }; // enum class BlockVisibility
 
 enum class BLOCK_TYPE : std::uint8_t {
-    BLOCK_TYPE_AIR = 0u, BLOCK_TYPE_STONE, BLOCK_TYPE_DIRT, BLOCK_TYPE_GRASS, BLOCK_TYPE_SAND, BLOCK_TYPE_WATER, 
+    BLOCK_TYPE_AIR = 0u,
+    BLOCK_TYPE_STONE,
+    BLOCK_TYPE_DIRT,
+    BLOCK_TYPE_GRASS,
+    BLOCK_TYPE_SAND,
+    BLOCK_TYPE_WATER, 
     
     _COUNT // used to know at compile time then umber of block 
 }; // enum class BlockType
 
 struct BlockProperties {
-    BLOCK_TYPE                                                   type;
-    BLOCK_VISIBILITY                                             visibility;
+    BLOCK_TYPE       type;
+    BLOCK_VISIBILITY visibility;
 };
 
 inline BlockProperties GetBlockProperties(const BLOCK_TYPE& type) noexcept {

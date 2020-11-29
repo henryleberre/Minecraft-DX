@@ -64,13 +64,13 @@ inline Vec4f32 CrossProduct3D(const Vec4f32& lhs, const Vec4f32& rhs) noexcept {
 inline Vec4f32 Normalized2D(const Vec4f32& lhs) noexcept {
     const float l = lhs.GetLength2D();
 
-    return lhs / Vec4f32{l, l, 1.f, 1.f};
+    return lhs / Vec4f32{l, l, lhs.z, lhs.w};
 }
 
 inline Vec4f32 Normalized3D(const Vec4f32& lhs) noexcept {
     const float l = lhs.GetLength3D();
 
-    return lhs / Vec4f32{l, l, l, 1.f};
+    return lhs / Vec4f32{l, l, l, lhs.w};
 }
 
 inline Vec4f32 Normalized4D(const Vec4f32& lhs) noexcept {

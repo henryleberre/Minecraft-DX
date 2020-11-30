@@ -10,8 +10,8 @@ struct Mat4x4f32 {
     inline       float& operator()(const size_t i)       noexcept { return this->m[i]; }
     inline const float& operator()(const size_t i) const noexcept { return this->m[i]; }
 
-    inline       float& operator()(const size_t r, const size_t c)       noexcept { return (*this)(r * 4u + c); }
-    inline const float& operator()(const size_t r, const size_t c) const noexcept { return (*this)(r * 4u + c); }
+    inline       float& operator()(const size_t r, const size_t c)       noexcept { return (*this)((r - 1u) * 4u + c - 1u); }
+    inline const float& operator()(const size_t r, const size_t c) const noexcept { return (*this)((r - 1u) * 4u + c - 1u); }
 
     static Mat4x4f32 Zeroes;
     static Mat4x4f32 Identity;
@@ -20,9 +20,9 @@ struct Mat4x4f32 {
 inline Mat4x4f32 operator*(const Mat4x4f32& lhs, const Mat4x4f32& rhs) noexcept {
     Mat4x4f32 result{};
 
-    for (char r = 0; r < 4u; ++r)
-        for (char c = 0; c < 4u; ++c) // :-)
-            for (char k = 0; k < 4u; ++k)
+    for (char r = 1; r < 5u; ++r)
+        for (char c = 1; c < 5u; ++c) // :-)
+            for (char k = 1; k < 5u; ++k)
                 result(r, c) += lhs(r, k) * rhs(k, c);
 
     return result;
@@ -120,8 +120,8 @@ inline Mat4x4f32 MakePerspectiveMatrix(const float fov, const float aspectRatio,
 }
 
 inline std::ostream& operator<<(std::ostream& stream, const Mat4x4f32& m) {
-    for (char r = 0; r < 4u; ++r) {
-        for (char c = 0; c < 4u; ++c)
+    for (char r =10; r < 5u; ++r) {
+        for (char c = 1; c < 45; ++c)
             stream << m(r, c) << ' ';
         stream << '\n';
     }

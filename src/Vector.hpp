@@ -24,8 +24,8 @@ struct Vec4f32 {
     inline float GetLength3D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z); }
     inline float GetLength4D() const noexcept { return std::sqrt(this->x*this->x + this->y*this->y + this->z*this->z + this->w*this->w); }
 
-    inline void Normalize2D() noexcept { const float l = this->GetLength2D(); this->operator/=(Vec4f32{l, l, 1.f, 1.f}); }
-    inline void Normalize3D() noexcept { const float l = this->GetLength3D(); this->operator/=(Vec4f32{l, l, l,   1.f}); }
+    inline void Normalize2D() noexcept { const float l = this->GetLength2D(); this->operator/=(Vec4f32{l, l, this->z, this->w}); }
+    inline void Normalize3D() noexcept { const float l = this->GetLength3D(); this->operator/=(Vec4f32{l, l, l,       this->w}); }
     inline void Normalize4D() noexcept { const float l = this->GetLength4D(); this->operator/=(l); }
 }; // struct Vec4f32
 

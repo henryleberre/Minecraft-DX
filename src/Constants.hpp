@@ -11,4 +11,9 @@ constexpr std::size_t TEXTURE_SIDE_LENGTH = 16u; // in pixels
 
 constexpr int RENDER_DISTANCE = 10; // in chunks
 
+// Meta constants
+constexpr float CHUNK_X_LENGTH = CHUNK_X_BLOCK_COUNT * BLOCK_LENGTH;
+constexpr float CHUNK_Y_LENGTH = CHUNK_Y_BLOCK_COUNT * BLOCK_LENGTH;
+constexpr float CHUNK_Z_LENGTH = CHUNK_Z_BLOCK_COUNT * BLOCK_LENGTH;
+
 #endif // __MINECRAFT__CONSTANTS_HPP

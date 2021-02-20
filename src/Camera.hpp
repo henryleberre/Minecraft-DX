@@ -29,38 +29,48 @@ enum class CAMERA_FRUSTUM_PLANE {
 struct CameraFrustum {
     std::array<CameraFrustumPlane, static_cast<std::size_t>(CAMERA_FRUSTUM_PLANE::_COUNT)> planes;
 
-    inline bool IsChunkInFrustum(const Chunk& chunk) const noexcept {
+    inline bool IsChunkInFrustum(const Chunk& chunk) const noexcept {        
         const auto& cc = chunk.GetLocation();
 
-        const float halfChunkXLength = CHUNK_X_BLOCK_COUNT * BLOCK_LENGTH / 2.f;
-        const float halfChunkZLength = CHUNK_Z_BLOCK_COUNT * BLOCK_LENGTH / 2.f;
-        const float chunkYLength     = CHUNK_Y_BLOCK_COUNT * BLOCK_LENGTH;
-
-        const Vec4f32 chunkCenterXZAxis = {
-            static_cast<float>(cc.idx) * CHUNK_X_LENGTH + halfChunkXLength,
+        const Vec4f32 chunkBaseXZAxis = {
+            static_cast<float>(cc.idx) * CHUNK_X_LENGTH,
             0.f,
-            static_cast<float>(cc.idz) * CHUNK_Z_LENGTH + halfChunkZLength
+            static_cast<float>(cc.idz) * CHUNK_Z_LENGTH
         };
 
         const auto& checkFrustumPlanes = {
             CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_LEFT,
-            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_RIGHT
+            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_RIGHT,
+            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_BOTTOM,
+            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_TOP,
+            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_NEAR,
+            CAMERA_FRUSTUM_PLANE::CAMERA_FRUSTUM_PLANE_FAR
         };
 
         const auto& checkPoints = {
-            chunkCenterXZAxis + Vec4f32{-halfChunkXLength, 0.f, -halfChunkZLength},
-            chunkCenterXZAxis + Vec4f32{-halfChunkXLength, 0.f, +halfChunkZLength},
-            chunkCenterXZAxis + Vec4f32{+halfChunkXLength, 0.f, -halfChunkZLength},
-            chunkCenterXZAxis + Vec4f32{+halfChunkXLength, 0.f, +halfChunkZLength}
+            chunkBaseXZAxis + Vec4f32{0.f,            0.f,            0.f },
+            chunkBaseXZAxis + Vec4f32{CHUNK_X_LENGTH, 0.f,            0.f },
+            chunkBaseXZAxis + Vec4f32{CHUNK_X_LENGTH, CHUNK_Y_LENGTH, 0.f },
+            chunkBaseXZAxis + Vec4f32{0.f,            CHUNK_Y_LENGTH, 0.f },
+
+            chunkBaseXZAxis + Vec4f32{0.f,            0.f,            CHUNK_Z_LENGTH },
+            chunkBaseXZAxis + Vec4f32{CHUNK_X_LENGTH, 0.f,            CHUNK_Z_LENGTH },
+            chunkBaseXZAxis + Vec4f32{CHUNK_X_LENGTH, CHUNK_Y_LENGTH, CHUNK_Z_LENGTH },
+            chunkBaseXZAxis + Vec4f32{0.f,            CHUNK_Y_LENGTH, CHUNK_Z_LENGTH }
         };
 
-        for (const auto& point : checkPoints) {
-            for (const auto& planeEnum : checkFrustumPlanes) {
-                const CameraFrustumPlane& plane = this->planes[static_cast<std::size_t>(planeEnum)];
+        for (const auto& planeEnum : checkFrustumPlanes) {
+            const CameraFrustumPlane& plane = this->planes[static_cast<std::size_t>(planeEnum)];
 
-                if (IsPointOutsideFrustumOfPlane(point, plane))
-                    return false;
+            bool bOneIn = false;
+            for (const auto& point : checkPoints) {
+                if (IsPointInsideFrustumOfPlane(point, plane)) {
+                    bOneIn = true;
+                    break;
+                }
             }
+            if (!bOneIn)
+                return false;
         }
 
         return true;
